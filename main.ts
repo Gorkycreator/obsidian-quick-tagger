@@ -1,37 +1,37 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, SliderComponent } from 'obsidian';
 import { arrayBuffer } from 'stream/consumers';
 import { QuickTagSelector } from './modal'
 import { prepYaml, addTag, removeTag } from `./utilities`
 
-interface QuickTaggerSettings {
-	tags: string[];
-	exclusive: boolean;
+export interface QuickTaggerSettings {
+	tags: string;
+	all_tags: boolean;
 }
 
 const DEFAULT_SETTINGS: QuickTaggerSettings = {
 	tags: [],
-	exclusive: false
+	all_tags: true
 }
 
-export default class MyPlugin extends Plugin {
+export default class QuickTagPlugin extends Plugin {
 	settings: QuickTaggerSettings;
 
 	async onload() {
 		await this.loadSettings();
 
 		const addTagRibbonIcon = this.addRibbonIcon('tag', 'Add Tag to Current Note', (evt: MouseEvent) => {
-			new QuickTagSelector(this.app, 'add').open();
+			new QuickTagSelector(this.app, this.settings, 'add').open();
 		});
 
 		const removeTagRibbonIcon = this.addRibbonIcon('x-square', 'Remove Tag from Current Note', (evt: MouseEvent) => {
-			new QuickTagSelector(this.app, 'remove').open();
+			new QuickTagSelector(this.app, this.settings, 'remove').open();
 		});
 
 		// Quick Tagger Logic testing
 		this.addCommand({
 			id: 'quick-tag',
 			name: 'Quick Tag',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
+			callback: (editor: Editor, view: MarkdownView) => {
 				var note_text = editor.getValue()
 				var updated_text = prepYaml(note_text, ['tags'])
 				var tags = [this.settings.tags[0].replace("#", "")]
@@ -61,7 +61,7 @@ export default class MyPlugin extends Plugin {
 
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+		this.addSettingTab(new QuickTagSettingTab(this.app, this));
 
 		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
 		// Using this function will automatically remove the event listener when this plugin is disabled.
@@ -102,10 +102,10 @@ class SampleModal extends Modal {
 	}
 }
 
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+class QuickTagSettingTab extends PluginSettingTab {
+	plugin: QuickTagPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: QuickTagPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -115,20 +115,27 @@ class SampleSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
+		containerEl.createEl('h2', {text: 'Quick Tagger Settings'});
 
 		new Setting(containerEl)
-			.setName('Tags')
-			.setDesc('Select tags for quick tagging')
+			.setName('Priority Tags')
+			.setDesc('Tags to show at the top of the list, in order. Seperate tags with commas.')
 			.addTextArea(text => text
 				.setPlaceholder('Enter tags seperated by commas.')
-				.setValue(this.plugin.settings.mySetting)
+				.setValue(this.plugin.settings.tags)
 				.onChange(async (value) => {
 					console.log('Updated tags: ' + value);
-					var tags = value.split(",")
-					tags = tags.map(s => s.trim())
-					this.plugin.settings.tags = tags;
+					this.plugin.settings.tags = value;
 					await this.plugin.saveSettings();
 				}));
+		new Setting(containerEl)
+			.setName('Use All Tags')
+			.setDesc('If enabled, all tags in the vault will be shown')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.all_tags)
+				.onChange(async (value) => {
+					this.plugin.settings.all_tags = value;
+					await this.plugin.saveSettings();
+			}));
 	}
 }

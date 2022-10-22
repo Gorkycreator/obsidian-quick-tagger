@@ -1,50 +1,37 @@
-import { App, Notice, SuggestModal } from "obsidian";
-import {removeTag, addTag} from "./utilities"
-
-interface Tags {
-    name: string;
-    position: string;
-}
-
-
-var tag_dict = app.metadataCache.getTags()
-var tag_array = []
-
-for (const key in tag_dict) {
-    if (tag_dict.hasOwnProperty(key)) {
-        tag_array.push({'name': key, 'position': tag_dict[key]})
-    }
-}
-
-const ALL_TAGS = tag_array
+import { App, FuzzySuggestModal, Plugin, Setting } from "obsidian";
+import {removeTag, addTag, getTagList, getExistingTags} from "./utilities"
+import {QuickTaggerSettings} from "./main"
 
 const MODE_SWITCHER = {
     'add': addTag,
     'remove': removeTag
 }
 
-export class QuickTagSelector extends SuggestModal<Tags> {
+const TAG_GATHERER = {
+    'add': getTagList,
+    'remove': getExistingTags
+}
+
+export class QuickTagSelector extends FuzzySuggestModal<string> {
     mode: number
     func: Function
+    tagArray: Array<string>
 
-    constructor (app: App, mode: string){
+    constructor (app: App, settings: QuickTaggerSettings, mode: string){
         super(app)
         this.func = MODE_SWITCHER[mode]
+        this.tagArray = TAG_GATHERER[mode](app, settings)
     }
 
-    // Returns all availalbe suggestions
-    getSuggestions(query: string): Tags[] {
-        console.log(ALL_TAGS)
-        return ALL_TAGS.filter((tag) => tag.name.toLowerCase().includes(query.toLowerCase()))
+    getItems() {
+        return this.tagArray
     }
-
-    // Renders each suggestion item
-    renderSuggestion(tag: Tags, el: HTMLElement) {
-        el.createEl('div', {text: tag.name});
+    getItemText(tag: string): string {
+        return tag
     }
 
     // Perform action on the selected suggestion
-    onChooseSuggestion(tag: Tags, evt: MouseEvent | KeyboardEvent) {
-        this.func(tag.name)
+    onChooseItem(tag: string, evt: MouseEvent | KeyboardEvent) {
+        this.func(tag)
     }
 }
