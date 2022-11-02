@@ -21,10 +21,3 @@ data.json
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store
 
-# Richard's ignore files
-.editorconfig
-.eslintignore
-.eslintrc
-.npmrc
-esbuild.config.mjs
-tsconfig.json
