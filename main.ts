@@ -86,21 +86,6 @@ export default class QuickTagPlugin extends Plugin {
 	}
 }
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
 
 class QuickTagSettingTab extends PluginSettingTab {
 	plugin: QuickTagPlugin;
@@ -118,8 +103,8 @@ class QuickTagSettingTab extends PluginSettingTab {
 		containerEl.createEl('h2', {text: 'Quick Tagger Settings'});
 
 		new Setting(containerEl)
-			.setName('Priority Tags')
-			.setDesc('Tags to show at the top of the list, in order. Seperate tags with commas.')
+			.setName('Favorite Tags')
+			.setDesc('Favorite tags to show up at the top of the list, in the order listed here. Seperate tags with commas.')
 			.addTextArea(text => text
 				.setPlaceholder('Enter tags seperated by commas.')
 				.setValue(this.plugin.settings.tags)
@@ -130,7 +115,7 @@ class QuickTagSettingTab extends PluginSettingTab {
 				}));
 		new Setting(containerEl)
 			.setName('Use All Tags')
-			.setDesc('If enabled, all tags in the vault will be shown')
+			.setDesc('If disabled, only Favorite Tags will be shown')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.all_tags)
 				.onChange(async (value) => {
