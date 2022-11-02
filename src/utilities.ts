@@ -1,5 +1,5 @@
 import{parseYaml, stringifyYaml, MarkdownView, Notice, getAllTags, App, Plugin} from 'obsidian'
-import {QuickTaggerSettings} from "../main"
+import {QuickTaggerSettings} from "./main"
 export {prepYaml, addTag, removeTag, getTagList}
 
 function yamlEditor(note_content: string, yaml_exec: Function) {
@@ -107,8 +107,10 @@ function getTagList(app: App, settings: QuickTaggerSettings){
 
 	for (var i=0; i<tagSettings.length; i++){
 		var name = "#" + tagSettings[i].replace('#', '')
-		tag_array.push(name)
+		if(name.replace("#", "")){tag_array.push(name)}
 	}
+	console.log("check to make sure the array is good:")
+	console.log(tag_array)
 
 	if (!settings.all_tags){
 		return tag_array

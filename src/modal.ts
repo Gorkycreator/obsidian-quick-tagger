@@ -1,6 +1,6 @@
 import { App, FuzzySuggestModal, Plugin, Setting } from "obsidian";
 import {removeTag, addTag, getTagList, getExistingTags} from "./utilities"
-import {QuickTaggerSettings} from "../main"
+import {QuickTaggerSettings} from "./main"
 
 const MODE_SWITCHER = {
     'add': addTag,

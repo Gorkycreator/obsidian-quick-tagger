@@ -1,7 +1,7 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, SliderComponent } from 'obsidian';
 import { arrayBuffer } from 'stream/consumers';
 import { QuickTagSelector } from './modal'
-import { prepYaml, addTag, removeTag } from `./utilities`
+import { prepYaml, addTag, removeTag } from './utilities'
 
 export interface QuickTaggerSettings {
 	tags: string;
