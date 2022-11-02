@@ -19,7 +19,6 @@ function yamlEditor(note_content: string, yaml_exec: Function) {
 
 function prepYaml(note_content: string, required_fields: Array<string>){
 	if (/^\n*\-\-\-/.test(note_content)){
-		console.log("there is yaml")
 		note_content = yamlEditor(note_content, (yml: object) => {
 			for(var i=0; i<required_fields.length; i++){
 				if (!yml.hasOwnProperty(required_fields[i])){yml[required_fields[i]] = []}
@@ -27,9 +26,13 @@ function prepYaml(note_content: string, required_fields: Array<string>){
 			return yml
 		})
 		return note_content
-	} else {
-		console.log("there is no yaml")  // build yaml if it doesn't exist
-		note_content = "---\ntags: \n---\n" + note_content
+	} else { // build yaml if it does not exist
+		var yml_header = "---\n"
+		for(var i=0; i<required_fields.length; i++){
+			yml_header = yml_header + required_fields[i] + ": \n"
+		}
+		yml_header = yml_header + "---\n"
+		note_content = yml_header + note_content
 		return note_content
 	}
 }
@@ -37,12 +40,10 @@ function prepYaml(note_content: string, required_fields: Array<string>){
 
 function yamlToArray(content: string|Array<string>){
 	if (typeof(content) == 'string'){
-		console.log("it's a string")
 		var tags = content.split(",")
 		tags = tags.map(s => s.trim())
 		return tags
 	} else if (typeof(content) == 'object' && content !== null){
-		console.log("it's an array")
 		console.log(typeof(content))
 		return content
 	} else {
@@ -53,15 +54,13 @@ function yamlToArray(content: string|Array<string>){
 
 
 function addTag(tag: string){
-    const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!markdownView){
-        new Notice("No File open!")
-        return
-    }
+    const markdownView = markdownViewCheck(app)
+    if (!markdownView){return}
 
 	var new_tag = tag.replace("#", '')  // make sure we didn't get any hashtags with that tag selection!
 
     var note_content = markdownView.editor.getValue()
+	note_content = prepYaml(note_content, ['tags'])  // make sure there's a yaml header with tags
 	note_content = yamlEditor(note_content, (yml: object) => {
 		yml.tags = yamlToArray(yml.tags)
 		if (yml.tags.includes(new_tag) == false){
@@ -71,17 +70,14 @@ function addTag(tag: string){
 		}
 		return yml
 	})
-	markdownView.setViewData(note_content)
+	markdownView.setViewData(note_content, false)
 	markdownView.editor.setValue(note_content)
 }
 
 
 function removeTag(tag: string){
-	const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!markdownView){
-        new Notice("No File open!")
-        return
-    }
+	const markdownView = markdownViewCheck(app)
+    if (!markdownView){return}
 
 	tag = tag.replace("#", '')  // make sure we didn't get any hashtags with that tag selection!
 
@@ -99,7 +95,7 @@ function removeTag(tag: string){
 		}
 		return yml
 	})
-	markdownView.setViewData(note_content)
+	markdownView.setViewData(note_content, false)
 	markdownView.editor.setValue(note_content)
 }
 
@@ -131,11 +127,8 @@ function getTagList(app: App, settings: QuickTaggerSettings){
 export function getExistingTags(app: App, settings: QuickTaggerSettings){
 	// TODO: this can be updated to work with category tags (user creates template note with categores
 	//       and this gets existing tags on that note?)
-	const markdownView = app.workspace.getActiveViewOfType(MarkdownView);
-    if (!markdownView){
-        new Notice("No File open!")
-        return
-    }
+	const markdownView = markdownViewCheck(app)
+    if (!markdownView){return}
 
 	var note_content = markdownView.getViewData()
 	note_content = prepYaml(note_content, ['tags'])
@@ -149,4 +142,12 @@ export function getExistingTags(app: App, settings: QuickTaggerSettings){
 	}
 	tag_array.push('REMOVE ALL')
 	return tag_array
+}
+
+function markdownViewCheck (app: App){
+	const markdownView = app.workspace.getActiveViewOfType(MarkdownView);
+	if (!markdownView){
+		new Notice("No file open!")
+	}
+	return markdownView
 }

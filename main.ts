@@ -9,7 +9,7 @@ export interface QuickTaggerSettings {
 }
 
 const DEFAULT_SETTINGS: QuickTaggerSettings = {
-	tags: [],
+	tags: '',
 	all_tags: true
 }
 
@@ -29,33 +29,19 @@ export default class QuickTagPlugin extends Plugin {
 
 		// Quick Tagger Logic testing
 		this.addCommand({
-			id: 'quick-tag',
-			name: 'Quick Tag',
-			callback: (editor: Editor, view: MarkdownView) => {
-				var note_text = editor.getValue()
-				var updated_text = prepYaml(note_text, ['tags'])
-				var tags = [this.settings.tags[0].replace("#", "")]
-				for (var i=0; i<tags.length; i++){
-					updated_text = removeTag(updated_text, tags[i])
-				}
-				editor.setValue(updated_text)
+			id: 'quick-add-tag',
+			name: 'Add Tag',
+			callback: () => {
+				new QuickTagSelector(this.app, this.settings, 'add').open()
 			}
 		});
 
 		// Quick Tagger Modal
 		this.addCommand({
 			id: 'open-quick-tagger',
-			name: 'Open Quick Tagger',
-			checkCallback: (checking: boolean) => {
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					if (!checking) {
-						var test = new QuickTagSelector(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
+			name: 'Remove Tag',
+			callback: () => {
+				new QuickTagSelector(this.app, this.settings, 'remove').open()
 			}
 		});
 
