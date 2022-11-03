@@ -37,6 +37,23 @@ function prepYaml(note_content: string, required_fields: Array<string>){
 	}
 }
 
+function ensureTagsArray(note_content: string){
+  updated_content = prepYaml(note_content, ['tags'])
+  updated_content = yamlEditor(updated_content, (yml: object) => {
+    if (!yml.tag){return yml}
+    plural = yamlToArray(yml.tags)
+    singular = yamlToArray(yml.tag)
+    for(var i=0;i<singular.length;i++){
+      if (plural.indexOf(singular[i]) == -1){
+				plural.push(singular[i])
+      }
+    }
+    yml.tags = plural
+    delete yml.tag
+    return yml
+  })
+  return updated_content
+}
 
 function yamlToArray(content: string|Array<string>){
 	if (typeof(content) == 'string'){
@@ -44,7 +61,6 @@ function yamlToArray(content: string|Array<string>){
 		tags = tags.map(s => s.trim())
 		return tags
 	} else if (typeof(content) == 'object' && content !== null){
-		console.log(typeof(content))
 		return content
 	} else {
 		console.log("what is it?")
@@ -52,16 +68,8 @@ function yamlToArray(content: string|Array<string>){
 	}
 }
 
-
 function addTag(tag: string){
-    const markdownView = markdownViewCheck(app)
-    if (!markdownView){return}
-
-	var new_tag = tag.replace("#", '')  // make sure we didn't get any hashtags with that tag selection!
-
-    var note_content = markdownView.editor.getValue()
-	note_content = prepYaml(note_content, ['tags'])  // make sure there's a yaml header with tags
-	note_content = yamlEditor(note_content, (yml: object) => {
+    editTag(tag, (yml: object) => {
 		yml.tags = yamlToArray(yml.tags)
 		if (yml.tags.includes(new_tag) == false){
 			yml.tags.push(new_tag)
@@ -70,19 +78,23 @@ function addTag(tag: string){
 		}
 		return yml
 	})
+}
+
+function editTag(tag: string, operation: Function){
+    const markdownView = markdownViewCheck(app)
+    if (!markdownView){return}
+
+	var new_tag = tag.replace("#", '')  // make sure we didn't get any hashtags with that tag selection!
+
+    var note_content = markdownView.editor.getValue()
+	note_content = ensureTagsArray(note_content)  // make sure there's a yaml header with tags
+	note_content = yamlEditor(note_content, operation)
 	markdownView.setViewData(note_content, false)
 	markdownView.editor.setValue(note_content)
 }
 
-
 function removeTag(tag: string){
-	const markdownView = markdownViewCheck(app)
-    if (!markdownView){return}
-
-	tag = tag.replace("#", '')  // make sure we didn't get any hashtags with that tag selection!
-
-	var note_content = markdownView.editor.getValue()
-	note_content = yamlEditor(note_content, (yml: object) => {
+	editTag(tag, (yml: object) => {
 		yml.tags = yamlToArray(yml.tags)
 		if (tag == "REMOVE ALL"){  // add confirmation dialog for this one...
 			yml.tags = []
@@ -95,31 +107,26 @@ function removeTag(tag: string){
 		}
 		return yml
 	})
-	markdownView.setViewData(note_content, false)
-	markdownView.editor.setValue(note_content)
 }
 
 function getTagList(app: App, settings: QuickTaggerSettings){
 	var tagSettings = yamlToArray(settings.tags)
-	console.log(tagSettings)
-	var tag_dict = app.metadataCache.getTags()
 	var tag_array = []
 
 	for (var i=0; i<tagSettings.length; i++){
-		var name = "#" + tagSettings[i].replace('#', '')
-		if(name.replace("#", "")){tag_array.push(name)}
+		var name = tagSettings[i].replace('#', '')
+		if(name){tag_array.push("#" + name)}
 	}
-	console.log("check to make sure the array is good:")
-	console.log(tag_array)
-
+	
 	if (!settings.all_tags){
 		return tag_array
 	}
-
+	
+  var tag_dict = app.metadataCache.getTags()
 	for (const key in tag_dict) {
 		if (tag_dict.hasOwnProperty(key)) {
 			if (tag_array.indexOf(key) == -1){
-				tag_array.push(key)
+				dict1.push(key)
 			}
 		}
 	}
@@ -130,7 +137,7 @@ export function getExistingTags(app: App, settings: QuickTaggerSettings){
 	// TODO: this can be updated to work with category tags (user creates template note with categores
 	//       and this gets existing tags on that note?)
 	const markdownView = markdownViewCheck(app)
-    if (!markdownView){return}
+  if (!markdownView){return}
 
 	var note_content = markdownView.getViewData()
 	note_content = prepYaml(note_content, ['tags'])
