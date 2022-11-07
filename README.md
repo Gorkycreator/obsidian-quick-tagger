@@ -20,7 +20,8 @@ This plugin is provided as-is, use at your own risk. I've tested it personally a
 This plugin does not add the tags to an undo/redo queue, please be aware of that while you use it, particularly when removing all tags.
 
 ## Roadmap
-- [ ] Add a confirmation warning for removing all tags
+- [x] Add a confirmation warning for removing all tags
+- [ ] Permit adding new tag from tag selector
 
 ## Manually installing the plugin
 
