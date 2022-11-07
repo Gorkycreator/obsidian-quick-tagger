@@ -18,7 +18,8 @@ function yamlEditor(note_content: string, yaml_exec: Function) {
 
 
 function prepYaml(note_content: string, required_fields: Array<string>){
-	if (/^\n*\-\-\-/.test(note_content)){
+	// sets up the yaml header with a given key
+	if (/^\n*\-\-\-/.test(note_content)){  // add to yaml if it exists
 		note_content = yamlEditor(note_content, (yml: object) => {
 			for(var i=0; i<required_fields.length; i++){
 				if (!yml.hasOwnProperty(required_fields[i])){yml[required_fields[i]] = []}
@@ -26,7 +27,7 @@ function prepYaml(note_content: string, required_fields: Array<string>){
 			return yml
 		})
 		return note_content
-	} else { // build yaml if it does not exist
+	} else {  // build yaml if it does not exist
 		var yml_header = "---\n"
 		for(var i=0; i<required_fields.length; i++){
 			yml_header = yml_header + required_fields[i] + ": \n"
@@ -37,54 +38,70 @@ function prepYaml(note_content: string, required_fields: Array<string>){
 	}
 }
 
+function ensureTagsArray(note_content: string){
+  // preps yaml with the 'tags' array, absorbing any existing 'tag' or 'tags' key
+  var updated_content = prepYaml(note_content, ['tags'])
+  updated_content = yamlEditor(updated_content, (yml: object) => {
+    if (!yml.tag){return yml}  // if no 'tag' key, it's good to go
+    var plural = yamlToArray(yml.tags)
+    var singular = yamlToArray(yml.tag)
+    for(var i=0;i<singular.length;i++){  // add all tags from 'tag' to 'tags'
+      if (plural.indexOf(singular[i]) == -1){
+			plural.push(singular[i])
+      }
+    }
+    yml.tags = plural
+    delete yml.tag
+    return yml
+  })
+  return updated_content
+}
 
 function yamlToArray(content: string|Array<string>){
+	// converts a yaml string to an array or logs an error if the type is unknown
 	if (typeof(content) == 'string'){
 		var tags = content.split(",")
 		tags = tags.map(s => s.trim())
 		return tags
 	} else if (typeof(content) == 'object' && content !== null){
-		console.log(typeof(content))
 		return content
 	} else {
-		console.log("what is it?")
+		console.log("ERROR: yaml 'tags' value is not string or array!")
 		return []
 	}
 }
 
-
-function addTag(tag: string){
-    const markdownView = markdownViewCheck(app)
-    if (!markdownView){return}
-
-	var new_tag = tag.replace("#", '')  // make sure we didn't get any hashtags with that tag selection!
-
-    var note_content = markdownView.editor.getValue()
-	note_content = prepYaml(note_content, ['tags'])  // make sure there's a yaml header with tags
-	note_content = yamlEditor(note_content, (yml: object) => {
+function addTag(new_tag: string){
+	// Add a tag to the yaml header
+    editTag(new_tag, (yml: object) => {
 		yml.tags = yamlToArray(yml.tags)
-		if (yml.tags.includes(new_tag) == false){
-			yml.tags.push(new_tag)
+		var clean_tag = new_tag.replace("#", "")
+		if (yml.tags.includes(clean_tag) == false){
+			yml.tags.push(clean_tag)
 		} else {
-			new Notice('Already tagged with "' + tag + '"')
+			new Notice('Already tagged with "' + new_tag + '"')
 		}
 		return yml
 	})
+}
+
+function editTag(tag: string, operation: Function){
+	// access the markdownView and apply an operation to the yaml's tags attribute
+    const markdownView = markdownViewCheck(app)
+    if (!markdownView){return}
+
+    var note_content = markdownView.editor.getValue()
+	note_content = ensureTagsArray(note_content)  // make sure there's a yaml header with tags
+	note_content = yamlEditor(note_content, operation)
 	markdownView.setViewData(note_content, false)
 	markdownView.editor.setValue(note_content)
 }
 
-
 function removeTag(tag: string){
-	const markdownView = markdownViewCheck(app)
-    if (!markdownView){return}
-
-	tag = tag.replace("#", '')  // make sure we didn't get any hashtags with that tag selection!
-
-	var note_content = markdownView.editor.getValue()
-	note_content = yamlEditor(note_content, (yml: object) => {
+	// remove a tag from the yaml header
+	editTag(tag, (yml: object) => {
 		yml.tags = yamlToArray(yml.tags)
-		if (tag == "REMOVE ALL"){  // add confirmation dialog for this one...
+		if (tag == "REMOVE ALL"){  // TODO: add confirmation dialog for this one...
 			yml.tags = []
 			return yml
 		}
@@ -95,27 +112,22 @@ function removeTag(tag: string){
 		}
 		return yml
 	})
-	markdownView.setViewData(note_content, false)
-	markdownView.editor.setValue(note_content)
 }
 
 function getTagList(app: App, settings: QuickTaggerSettings){
 	var tagSettings = yamlToArray(settings.tags)
-	console.log(tagSettings)
-	var tag_dict = app.metadataCache.getTags()
 	var tag_array = []
 
 	for (var i=0; i<tagSettings.length; i++){
-		var name = "#" + tagSettings[i].replace('#', '')
-		if(name.replace("#", "")){tag_array.push(name)}
+		var name = tagSettings[i].replace('#', '')
+		if(name){tag_array.push("#" + name)}
 	}
-	console.log("check to make sure the array is good:")
-	console.log(tag_array)
-
+	
 	if (!settings.all_tags){
 		return tag_array
 	}
-
+	
+  var tag_dict = app.metadataCache.getTags()
 	for (const key in tag_dict) {
 		if (tag_dict.hasOwnProperty(key)) {
 			if (tag_array.indexOf(key) == -1){
@@ -127,9 +139,9 @@ function getTagList(app: App, settings: QuickTaggerSettings){
 }
 
 export function getExistingTags(app: App, settings: QuickTaggerSettings){
-	// TODO: this can be updated to work with category tags (user creates template note with categores
-	//       and this gets existing tags on that note?)
-	const markdownView = markdownViewCheck(app)
+    // TODO: this can be updated to work with category tags (user creates template note with categores
+    //       and this gets existing tags on that note?)
+    const markdownView = markdownViewCheck(app)
     if (!markdownView){return}
 
 	var note_content = markdownView.getViewData()
