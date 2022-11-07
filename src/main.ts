@@ -27,7 +27,7 @@ export default class QuickTagPlugin extends Plugin {
 			new QuickTagSelector(this.app, this.settings, 'remove').open();
 		});
 
-		// Quick Tagger Logic testing
+		// Quick Tagger Add tag modal command
 		this.addCommand({
 			id: 'quick-add-tag',
 			name: 'Add Tag',
@@ -36,7 +36,7 @@ export default class QuickTagPlugin extends Plugin {
 			}
 		});
 
-		// Quick Tagger Modal
+		// Quick Tagger Remove tag modal command
 		this.addCommand({
 			id: 'open-quick-tagger',
 			name: 'Remove Tag',
