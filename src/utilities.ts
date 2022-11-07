@@ -139,10 +139,10 @@ function getTagList(app: App, settings: QuickTaggerSettings){
 }
 
 export function getExistingTags(app: App, settings: QuickTaggerSettings){
-	// TODO: this can be updated to work with category tags (user creates template note with categores
-	//       and this gets existing tags on that note?)
-	const markdownView = markdownViewCheck(app)
-  if (!markdownView){return}
+    // TODO: this can be updated to work with category tags (user creates template note with categores
+    //       and this gets existing tags on that note?)
+    const markdownView = markdownViewCheck(app)
+    if (!markdownView){return}
 
 	var note_content = markdownView.getViewData()
 	note_content = prepYaml(note_content, ['tags'])
