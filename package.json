@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-quick-tagger",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"description": "This is a plugin to add a modal to quickly tag notes based on preset tags",
 	"main": "main.js",
 	"scripts": {
