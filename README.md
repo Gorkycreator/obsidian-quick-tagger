@@ -6,8 +6,8 @@ Originally developed to improve my personal workflow, it's mostly intended for u
 
 ## Features
 - No more typing in yaml headers just to add tags!
-- Independant add/remove commands to minimize flicking through menus
-- List your favorite tabs in the settings, those will show up at the top of the list
+- Independent add/remove commands to minimize flicking through menus
+- List your favorite tags in the settings, those will show up at the top of the list
 
 ## Demo
 ![demo](images/quick_tagger_demo.gif)
@@ -15,14 +15,14 @@ Originally developed to improve my personal workflow, it's mostly intended for u
 Note that this demo was recorded with buttons added to the title bar via Obsidian Commander. Some assembly required. Ribbon icons and command pallet actions are available in the standalone plugin, but this is my preferred workflow on mobile.
 
 ## Disclaimer
-This plugin is provided as-is, use at your own risk. I've tested it personally and use it on my vault but I can't confirm it's foolproof.
+This plugin is provided as-is, use at your own risk. I've tested it personally and use it on my vault but I can't confirm it's foolproof in every situation.
 
-This plugin does not add the tags to an undo/redo queue, please be aware of that while you use it, particularly when removing all tags.
+This plugin does not keep track of changes in an undo/redo queue, please be aware of that while you use it, particularly when removing all tags.
 
 ## Roadmap
 - [x] Add a confirmation warning for removing all tags
 - [ ] Permit adding new tag from tag selector
 
-## Manually installing the plugin
+## Manually install the plugin
 
-- Copy over `main.js` and `manifest.json` to your vault `VaultFolder/.obsidian/plugins/obsidian-quick-tagger/`.
+Copy `main.js` and `manifest.json` to your vault `VaultFolder/.obsidian/plugins/obsidian-quick-tagger/`.
