@@ -1,7 +1,6 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, SliderComponent } from 'obsidian';
-import { arrayBuffer } from 'stream/consumers';
 import { QuickTagSelector } from './modal'
-import { prepYaml, addTag, removeTag } from './utilities'
+import { getActiveFile , collectExistingTags, addTagToActive } from './utilities';
 
 export interface QuickTaggerSettings {
 	tags: string;
@@ -18,7 +17,8 @@ export default class QuickTagPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
-
+		
+		//Ribbon Icons
 		const addTagRibbonIcon = this.addRibbonIcon('tag', 'Add Tag to Current Note', (evt: MouseEvent) => {
 			new QuickTagSelector(this.app, this.settings, 'add').open();
 		});
@@ -27,7 +27,7 @@ export default class QuickTagPlugin extends Plugin {
 			new QuickTagSelector(this.app, this.settings, 'remove').open();
 		});
 
-		// Quick Tagger Add tag modal command
+		// Command Pallet Commands
 		this.addCommand({
 			id: 'quick-add-tag',
 			name: 'Add Tag',
@@ -36,7 +36,6 @@ export default class QuickTagPlugin extends Plugin {
 			}
 		});
 
-		// Quick Tagger Remove tag modal command
 		this.addCommand({
 			id: 'open-quick-tagger',
 			name: 'Remove Tag',
@@ -44,6 +43,29 @@ export default class QuickTagPlugin extends Plugin {
 				new QuickTagSelector(this.app, this.settings, 'remove').open()
 			}
 		});
+
+		this.addCommand({
+			id: 'test-quick-tagger',
+			name: 'debug test',
+			callback: () => {
+				console.log("DEBUG TEST!!!!")
+				var myFile = getActiveFile()
+				if(myFile){
+					this.app.fileManager.processFrontMatter(myFile, (frontmatter: object) => {
+						frontmatter = collectExistingTags(frontmatter)
+					})
+				}
+			}
+		})
+
+		this.addCommand({
+			id: 'test-add-tag',
+			name: 'debug add',
+			callback: () => {
+				console.log("DEBUG TEST!!!!")
+				addTagToActive('myTest')
+			}
+		})
 
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
@@ -89,8 +111,8 @@ class QuickTagSettingTab extends PluginSettingTab {
 		containerEl.createEl('h2', {text: 'Quick Tagger Settings'});
 
 		new Setting(containerEl)
-			.setName('Favorite Tags')
-			.setDesc('Favorite tags to show up at the top of the list, in the order listed here. Seperate tags with commas.')
+			.setName('Priority Tags')
+			.setDesc('Priority tags to show up at the top of the list, in the order listed here. Seperate tags with commas.')
 			.addTextArea(text => text
 				.setPlaceholder('Enter tags seperated by commas.')
 				.setValue(this.plugin.settings.tags)
@@ -101,7 +123,7 @@ class QuickTagSettingTab extends PluginSettingTab {
 				}));
 		new Setting(containerEl)
 			.setName('Use All Tags')
-			.setDesc('If disabled, only Favorite Tags will be shown')
+			.setDesc('If disabled, only Priority Tags will be shown')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.all_tags)
 				.onChange(async (value) => {

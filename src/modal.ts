@@ -1,32 +1,54 @@
-import { App, FuzzySuggestModal, Modal, Setting } from "obsidian";
-import {removeTag, addTag, getTagList, getExistingTags} from "./utilities"
+import { App, FuzzySuggestModal, Modal, Setting, Notice } from "obsidian";
+import {addTagToActive, getTagList, getTagsOnActive, removeTagFromActive} from "./utilities"
 import {QuickTaggerSettings} from "./main"
 
-const MODE_SWITCHER = {
-    'add': addTag,
-    'remove': removeTag
+
+type modeSwitcherLayout = {
+    add: Function;
+    remove?: Function;
 }
 
-const TAG_GATHERER = {
-    'add': getTagList,
-    'remove': getExistingTags
+const MODE_SWITCHER: modeSwitcherLayout = {
+    'add': addTagToActive,
+    'remove': removeTagFromActive
 }
+
+
+type tagGathererLayout = {
+    add: Function;
+    remove?: Function;
+}
+
+const TAG_GATHERER: tagGathererLayout = {
+    'add': getTagList,
+    'remove': getTagsOnActive
+}
+
 
 export class QuickTagSelector extends FuzzySuggestModal<string> {
-    mode: number
-    func: Function
-    tagArray: Array<string>
+    mode: string
+    func: Function | undefined
+    tagArray: Function | undefined
     confirm: boolean
+    settings: QuickTaggerSettings
 
+    
     constructor (app: App, settings: QuickTaggerSettings, mode: string){
         super(app)
-        this.func = MODE_SWITCHER[mode]
-        this.tagArray = TAG_GATHERER[mode](app, settings)
+        this.func = MODE_SWITCHER[mode as keyof modeSwitcherLayout]
+        this.tagArray = TAG_GATHERER[mode as keyof tagGathererLayout]
+        this.settings = settings
     }
 
     getItems() {
-        return this.tagArray
+        if(!this.tagArray){
+            new Notice("Error: Could not find tags!")
+            return []
+        }
+        var results = this.tagArray(app, this.settings)
+        return results
     }
+
     getItemText(tag: string): string {
         return tag
     }
@@ -40,8 +62,8 @@ export class QuickTagSelector extends FuzzySuggestModal<string> {
         } else {
             this.confirm = true
         }
-        if (this.confirm){
-            this.func(tag)
+        if (this.confirm && this.func){
+            this.func(tag.replace('#', ''))
         }
     }
 }

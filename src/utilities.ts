@@ -1,127 +1,136 @@
-import{parseYaml, stringifyYaml, MarkdownView, Notice, getAllTags, App, Plugin} from 'obsidian'
+import{parseYaml, stringifyYaml, MarkdownView, Notice, getAllTags, App, Plugin, TFile} from 'obsidian'
 import {QuickTaggerSettings} from "./main"
-export {prepYaml, addTag, removeTag, getTagList}
+export { getActiveFile, addTagToActive, collectExistingTags, getTagList, removeTagFromActive }
 
-function yamlEditor(note_content: string, yaml_exec: Function) {
-	// first split the yaml out
-	var ary = note_content.split("---")
-	var yml = parseYaml(ary[1])
-	if (yml == null){yml = {}}
-
-	// do the function
-	yml = yaml_exec(yml)
-	
-	// piece things back together
-	ary[1] = "\n"+stringifyYaml(yml)
-	return ary.join("---")
-}
+const tag_key = 'tags'
+const tag_cleanup = ['tag', 'Tag', 'Tags']
 
 
-function prepYaml(note_content: string, required_fields: Array<string>){
-	// sets up the yaml header with a given key
-	if (/^\n*\-\-\-/.test(note_content)){  // add to yaml if it exists
-		note_content = yamlEditor(note_content, (yml: object) => {
-			for(var i=0; i<required_fields.length; i++){
-				if (!yml.hasOwnProperty(required_fields[i])){yml[required_fields[i]] = []}
-			}
-			return yml
-		})
-		return note_content
-	} else {  // build yaml if it does not exist
-		var yml_header = "---\n"
-		for(var i=0; i<required_fields.length; i++){
-			yml_header = yml_header + required_fields[i] + ": \n"
-		}
-		yml_header = yml_header + "---\n"
-		note_content = yml_header + note_content
-		return note_content
-	}
-}
-
-function ensureTagsArray(note_content: string){
-  // preps yaml with the 'tags' array, absorbing any existing 'tag' or 'tags' key
-  var updated_content = prepYaml(note_content, ['tags'])
-  updated_content = yamlEditor(updated_content, (yml: object) => {
-    if (!yml.tag){return yml}  // if no 'tag' key, it's good to go
-    var plural = yamlToArray(yml.tags)
-    var singular = yamlToArray(yml.tag)
-    for(var i=0;i<singular.length;i++){  // add all tags from 'tag' to 'tags'
-      if (plural.indexOf(singular[i]) == -1){
-			plural.push(singular[i])
-      }
-    }
-    yml.tags = plural
-    delete yml.tag
-    return yml
-  })
-  return updated_content
-}
-
-function yamlToArray(content: string|Array<string>){
-	// converts a yaml string to an array or logs an error if the type is unknown
-	if (typeof(content) == 'string'){
-		var tags = content.split(",")
-		tags = tags.map(s => s.trim())
-		return tags
-	} else if (typeof(content) == 'object' && content !== null){
-		return content
+/**
+ * Gets the active file
+ * @returns Tfile or undefined
+ */
+function getActiveFile() {
+	var thisFile = this.app.workspace.getActiveFile()
+	if(thisFile instanceof TFile) {
+		return thisFile
 	} else {
-		console.log("ERROR: yaml 'tags' value is not string or array!")
-		return []
+		new Notice("No file open!")
+		return undefined
 	}
 }
 
-function addTag(new_tag: string){
-	// Add a tag to the yaml header
-    editTag(new_tag, (yml: object) => {
-		yml.tags = yamlToArray(yml.tags)
-		var clean_tag = new_tag.replace("#", "")
-		if (yml.tags.includes(clean_tag) == false){
-			yml.tags.push(clean_tag)
-		} else {
-			new Notice('Already tagged with "' + new_tag + '"')
+
+/**
+ * Edit the yaml header of many files ===============> NOT FINISHED
+ * @param notes - list of notes to process
+ * @param operation - function to process them. Must take a single yaml dict and return a modified yaml dict.
+ */
+function editMultipleYaml(notes: Array<TFile>, operation: Function) {
+	for (let i=0; i < notes.length; i++){
+		this.app.fileManager.processFrontMatter(notes[i], operation)
+	}
+}
+
+
+/**
+ * Adds a given tag to the active note
+ * @param tag the tag to add to the note
+ */
+function addTagToActive(tag:string){
+	var activeFile = getActiveFile()
+	if(activeFile){
+		this.app.fileManager.processFrontMatter(activeFile, (frontmatter: object) => {
+			frontmatter = collectExistingTags(frontmatter)
+			if(!frontmatter[tag_key].includes(tag)){
+				frontmatter[tag_key].push(tag)
+			} else {
+				new Notice(activeFile?.basename + ' already tagged with "#' + tag + '"')
+			}
+		})
+	}
+}
+
+
+/**
+ * Removes a given tag from the active note
+ * @param tag the tag to remove
+ */
+function removeTagFromActive(tag:string){
+	var activeFile = getActiveFile()
+	if(activeFile){
+		var processor = (frontmatter: object) => {
+			frontmatter = collectExistingTags(frontmatter)
+			var tags = frontmatter[tag_key]
+			var indx = tags.indexOf(tag, 0)
+			if (indx > -1){
+				tags.splice(indx, 1)
+			}
 		}
-		return yml
-	})
-}
-
-function editTag(tag: string, operation: Function){
-	// access the markdownView and apply an operation to the yaml's tags attribute
-    const markdownView = markdownViewCheck(app)
-    if (!markdownView){return}
-
-    var note_content = markdownView.editor.getValue()
-	note_content = ensureTagsArray(note_content)  // make sure there's a yaml header with tags
-	note_content = yamlEditor(note_content, operation)
-	markdownView.setViewData(note_content, false)
-	markdownView.editor.setValue(note_content)
-}
-
-function removeTag(tag: string){
-	// remove a tag from the yaml header
-	editTag(tag, (yml: object) => {
-		yml.tags = yamlToArray(yml.tags)
 		if (tag == "REMOVE ALL"){  // TODO: add confirmation dialog for this one...
-			yml.tags = []
-			return yml
+			processor = (frontmatter: object) => {
+				frontmatter = collectExistingTags(frontmatter)
+				frontmatter[tag_key] = []
+			}
 		}
-		var index = yml.tags.indexOf(tag)
-		while (index > -1){
-			yml.tags.splice(index, 1)
-			index = yml.tags.indexOf(tag)
-		}
-		return yml
-	})
+		this.app.fileManager.processFrontMatter(activeFile, processor)
+	}
 }
 
-function getTagList(app: App, settings: QuickTaggerSettings){
-	var tagSettings = yamlToArray(settings.tags)
-	var tag_array = []
 
-	for (var i=0; i<tagSettings.length; i++){
-		var name = tagSettings[i].replace('#', '')
-		if(name){tag_array.push("#" + name)}
+/**
+ * Collect all tag keys into one key
+ * @param yaml - a single yaml dict 
+ * @returns - a single modified yaml dict
+ */
+function collectExistingTags(yml:any){
+	console.log(yml)
+	// make the desired key, if it does not exist
+	if (!yml.hasOwnProperty(tag_key)){
+		yml[tag_key] = []
+	} else {
+		// catch existing string formatting that works in obsidian, but not javascript
+		yml[tag_key] = conformToArray(yml[tag_key])
 	}
+
+	// filter to any keys the yaml includes that we don't want
+	var alternate_keys = tag_cleanup.filter(v => Object.keys(yml).includes(v))
+	
+	for(var i=0;i<alternate_keys.length;i++){
+		var otherTags = conformToArray(yml[alternate_keys[i]])
+		otherTags.forEach((element: string) => {
+			// dump non-duplicate tags from other keys into the desired key
+			!yml[tag_key].includes(element) ? yml[tag_key].push(element) : console.log(element + " already exists") 
+		});
+
+		delete yml[alternate_keys[i]]  // remove the undesired keys
+	}
+
+	return yml
+  }
+
+/**
+ * Obsidian can store tags in the yaml header as a comma-separated string. This function converts this string format into an array
+ * @param input - a string or array to be conformed
+ * @returns - the conformed array
+ */
+function conformToArray(input:string | Array<string>){
+	var output = typeof(input) === 'string' ? input.split(',').map(e => e.trim()) : input
+	return output ? output : []
+}
+
+
+/**
+ * Gets a list of all tags in Obsidian with the priority tags listed first
+ * @param app 
+ * @param settings 
+ * @returns 
+ */
+function getTagList(app: App, settings: QuickTaggerSettings){
+	var tagSettings = conformToArray(settings.tags)
+	var tag_array = tagSettings.map((e) => e.replace('#', ''))
+	                           .filter((e) => e)
+							   .map((e) => '#' + e)
 	
 	if (!settings.all_tags){
 		return tag_array
@@ -138,30 +147,20 @@ function getTagList(app: App, settings: QuickTaggerSettings){
 	return tag_array
 }
 
-export function getExistingTags(app: App, settings: QuickTaggerSettings){
+
+/**
+ * Gets a list of tags from the active file
+ * @param app 
+ * @param settings 
+ * @returns 
+ */
+export function getTagsOnActive(app: App, settings: QuickTaggerSettings){
     // TODO: this can be updated to work with category tags (user creates template note with categores
     //       and this gets existing tags on that note?)
-    const markdownView = markdownViewCheck(app)
-    if (!markdownView){return}
-
-	var note_content = markdownView.getViewData()
-	note_content = prepYaml(note_content, ['tags'])
-	var ary = note_content.split("---")
-	var yml = parseYaml(ary[1])
-	yml.tags = yamlToArray(yml.tags)
-	var tag_array = []
-
-	for (var i=0; i<yml.tags.length; i++) {
-		tag_array.push(yml.tags[i])
-	}
+	var activeFile = getActiveFile()
+	var cache = this.app.metadataCache.getFileCache(activeFile);
+    var tag_array = cache?.frontmatter?.tags || [];
+	tag_array = tag_array.map((e) => e.replace('#', '')).filter((e) => e).map((e) => '#' + e)
 	tag_array.push('REMOVE ALL')
 	return tag_array
-}
-
-function markdownViewCheck (app: App){
-	const markdownView = app.workspace.getActiveViewOfType(MarkdownView);
-	if (!markdownView){
-		new Notice("No file open!")
-	}
-	return markdownView
 }
