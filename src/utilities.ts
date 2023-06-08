@@ -1,6 +1,6 @@
-import{parseYaml, stringifyYaml, MarkdownView, Notice, getAllTags, App, Plugin, TFile} from 'obsidian'
+import{parseYaml, stringifyYaml, MarkdownView, Notice, getAllTags, App, Plugin, TFile, parseFrontMatterTags } from 'obsidian'
 import {QuickTaggerSettings} from "./main"
-export { getActiveFile, addTagToActive, collectExistingTags, getTagList, removeTagFromActive }
+export { getActiveFile, addTagToMany, collectExistingTags, getTagList, removeTagFromMany, getTagsOnFiles }
 
 const tag_key = 'tags'
 const tag_cleanup = ['tag', 'Tag', 'Tags']
@@ -8,73 +8,100 @@ const tag_cleanup = ['tag', 'Tag', 'Tags']
 
 /**
  * Gets the active file
- * @returns Tfile or undefined
+ * @returns Tfile array
  */
 function getActiveFile() {
 	var thisFile = this.app.workspace.getActiveFile()
 	if(thisFile instanceof TFile) {
-		return thisFile
+		return [thisFile]
 	} else {
 		new Notice("No file open!")
-		return undefined
+		return [] as TFile[]
 	}
 }
 
 
 /**
- * Edit the yaml header of many files ===============> NOT FINISHED
- * @param notes - list of notes to process
- * @param operation - function to process them. Must take a single yaml dict and return a modified yaml dict.
+ * Adds a tag to a file
+ * @param thisFile the file to edit
+ * @param tag the tag to add
  */
-function editMultipleYaml(notes: Array<TFile>, operation: Function) {
-	for (let i=0; i < notes.length; i++){
-		this.app.fileManager.processFrontMatter(notes[i], operation)
-	}
+function addTag(thisFile: TFile, tag: string){
+	this.app.fileManager.processFrontMatter(thisFile, (frontmatter: object) => {
+		frontmatter = collectExistingTags(frontmatter)
+		if(!frontmatter[tag_key].includes(tag)){
+			frontmatter[tag_key].push(tag)
+		} else {
+			new Notice(thisFile?.basename + ' already tagged with "#' + tag + '"')
+		}
+	})
 }
 
 
 /**
- * Adds a given tag to the active note
- * @param tag the tag to add to the note
+ * Loops over files and adds tags
+ * @param files array of files to edit
+ * @param tag tag to add to them
  */
-function addTagToActive(tag:string){
-	var activeFile = getActiveFile()
-	if(activeFile){
-		this.app.fileManager.processFrontMatter(activeFile, (frontmatter: object) => {
-			frontmatter = collectExistingTags(frontmatter)
-			if(!frontmatter[tag_key].includes(tag)){
-				frontmatter[tag_key].push(tag)
-			} else {
-				new Notice(activeFile?.basename + ' already tagged with "#' + tag + '"')
-			}
+async function addTagToMany(files:Array<TFile>, tag:string){
+	await cleanFiles(files).then(() => {
+		files.forEach((f) => {
+			addTag(f, tag)
 		})
+	})
+	if(files.length > 1){
+		new Notice(files.length + ' notes tagged with "#' + tag + '"')
+	}
+}
+
+
+async function removeTagFromMany(files:TFile[], tag:string){
+	await cleanFiles(files).then(() => {
+		files.forEach((f) => {
+			removeTag(f, tag)
+		})
+	})
+	if(files.length > 1){
+		new Notice('"' + tag + '" removed from ' + files.length + ' notes')
 	}
 }
 
 
 /**
- * Removes a given tag from the active note
+ * processFrontMatter does not work if there are newlines before the metadata. Clear all newlines at the start of the document
+ * @param fileList 
+ */
+async function cleanFiles(fileList:TFile[]){
+	for(const f of fileList){
+		let text = await this.app.vault.read(f)
+		while(text[0] == '\n'){
+			text = text.slice(1)
+		}
+		await this.app.vault.modify(f, text)
+	}
+}
+
+
+/**
+ * Remove a tag from a note
  * @param tag the tag to remove
  */
-function removeTagFromActive(tag:string){
-	var activeFile = getActiveFile()
-	if(activeFile){
-		var processor = (frontmatter: object) => {
-			frontmatter = collectExistingTags(frontmatter)
-			var tags = frontmatter[tag_key]
-			var indx = tags.indexOf(tag, 0)
-			if (indx > -1){
-				tags.splice(indx, 1)
-			}
+function removeTag(thisFile: TFile, tag:string){
+	var processor = (frontmatter: object) => {
+		frontmatter = collectExistingTags(frontmatter)
+		var tags = frontmatter[tag_key]
+		var indx = tags.indexOf(tag, 0)
+		if (indx > -1){
+			tags.splice(indx, 1)
 		}
-		if (tag == "REMOVE ALL"){  // TODO: add confirmation dialog for this one...
-			processor = (frontmatter: object) => {
-				frontmatter = collectExistingTags(frontmatter)
-				frontmatter[tag_key] = []
-			}
-		}
-		this.app.fileManager.processFrontMatter(activeFile, processor)
 	}
+	if (tag == "REMOVE ALL"){  // TODO: add confirmation dialog for this one...
+		processor = (frontmatter: object) => {
+			frontmatter = collectExistingTags(frontmatter)
+			frontmatter[tag_key] = []
+		}
+	}
+	this.app.fileManager.processFrontMatter(thisFile, processor)
 }
 
 
@@ -126,7 +153,8 @@ function conformToArray(input:string | Array<string>){
  * @param settings 
  * @returns 
  */
-function getTagList(app: App, settings: QuickTaggerSettings){
+function getTagList(app: App, settings: QuickTaggerSettings, fileList:TFile[]){
+	// TODO: add filtering to remove tags that are already on the active file?
 	var tagSettings = conformToArray(settings.tags)
 	var tag_array = tagSettings.map((e) => e.replace('#', ''))
 	                           .filter((e) => e)
@@ -149,18 +177,25 @@ function getTagList(app: App, settings: QuickTaggerSettings){
 
 
 /**
- * Gets a list of tags from the active file
+ * Gets a list of tags from the given files
  * @param app 
  * @param settings 
+ * @param fileList
  * @returns 
  */
-export function getTagsOnActive(app: App, settings: QuickTaggerSettings){
-    // TODO: this can be updated to work with category tags (user creates template note with categores
-    //       and this gets existing tags on that note?)
-	var activeFile = getActiveFile()
-	var cache = this.app.metadataCache.getFileCache(activeFile);
-    var tag_array = cache?.frontmatter?.tags || [];
-	tag_array = tag_array.map((e) => e.replace('#', '')).filter((e) => e).map((e) => '#' + e)
+function getTagsOnFiles(app: App, settings: QuickTaggerSettings, fileList:TFile[]){
+	var tag_array = [] as string[]
+	fileList.forEach((f) =>{
+		var cache = this.app.metadataCache.getFileCache(f)
+		var new_tags = parseFrontMatterTags(cache.frontmatter)
+		console.log(new_tags)
+		if(new_tags){
+			new_tags.map((e) => e.replace('#', '')).filter((e) => e).map((e) => '#' + e)
+			new_tags.forEach((item) =>{
+				!tag_array.includes(item) ? tag_array.push(item) : undefined
+			})
+		}
+	})
 	tag_array.push('REMOVE ALL')
 	return tag_array
 }

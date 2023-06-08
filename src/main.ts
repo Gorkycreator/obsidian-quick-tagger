@@ -1,6 +1,6 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, SliderComponent } from 'obsidian';
 import { QuickTagSelector } from './modal'
-import { getActiveFile , collectExistingTags, addTagToActive } from './utilities';
+import { getActiveFile, collectExistingTags } from './utilities';
 
 export interface QuickTaggerSettings {
 	tags: string;
@@ -18,6 +18,8 @@ export default class QuickTagPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		
+
+		/*
 		//Ribbon Icons
 		const addTagRibbonIcon = this.addRibbonIcon('tag', 'Add Tag to Current Note', (evt: MouseEvent) => {
 			new QuickTagSelector(this.app, this.settings, 'add').open();
@@ -27,12 +29,15 @@ export default class QuickTagPlugin extends Plugin {
 			new QuickTagSelector(this.app, this.settings, 'remove').open();
 		});
 
+		*/
+
 		// Command Pallet Commands
 		this.addCommand({
 			id: 'quick-add-tag',
 			name: 'Add Tag',
 			callback: () => {
-				new QuickTagSelector(this.app, this.settings, 'add').open()
+				var currentFile = getActiveFile()
+				new QuickTagSelector(this.app, this.settings, currentFile, 'add').open()
 			}
 		});
 
@@ -40,7 +45,8 @@ export default class QuickTagPlugin extends Plugin {
 			id: 'open-quick-tagger',
 			name: 'Remove Tag',
 			callback: () => {
-				new QuickTagSelector(this.app, this.settings, 'remove').open()
+				var currentFile = getActiveFile()
+				new QuickTagSelector(this.app, this.settings, currentFile, 'remove').open()
 			}
 		});
 
@@ -49,7 +55,8 @@ export default class QuickTagPlugin extends Plugin {
 			name: 'debug test',
 			callback: () => {
 				console.log("DEBUG TEST!!!!")
-				var myFile = getActiveFile()
+
+				var myFile = getActiveFile()[0]
 				if(myFile){
 					this.app.fileManager.processFrontMatter(myFile, (frontmatter: object) => {
 						frontmatter = collectExistingTags(frontmatter)
@@ -66,6 +73,34 @@ export default class QuickTagPlugin extends Plugin {
 				addTagToActive('myTest')
 			}
 		})
+
+
+		// File Context menu commands
+		this.registerEvent(
+			this.app.workspace.on("files-menu", (menu, files) => {
+				menu.addItem((item) =>{
+					item
+					  .setTitle("Tag files with...")
+					  .setIcon("tag")
+					  .onClick(() => {
+						new QuickTagSelector(this.app, this.settings, files, 'add').open()
+					  })
+				})
+			})
+		)
+
+		this.registerEvent(
+			this.app.workspace.on("files-menu", (menu, files) => {
+				menu.addItem((item) =>{
+					item
+					  .setTitle("Remove Tags...")
+					  .setIcon("tag")
+					  .onClick(() => {
+						new QuickTagSelector(this.app, this.settings, files, 'remove').open()
+					  })
+				})
+			})
+		)
 
 
 		// This adds a settings tab so the user can configure various aspects of the plugin

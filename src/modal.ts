@@ -1,5 +1,5 @@
-import { App, FuzzySuggestModal, Modal, Setting, Notice } from "obsidian";
-import {addTagToActive, getTagList, getTagsOnActive, removeTagFromActive} from "./utilities"
+import { App, FuzzySuggestModal, Modal, Setting, Notice, TFile } from "obsidian";
+import {addTagToMany, getTagList, getTagsOnFiles, removeTagFromMany} from "./utilities"
 import {QuickTaggerSettings} from "./main"
 
 
@@ -9,8 +9,8 @@ type modeSwitcherLayout = {
 }
 
 const MODE_SWITCHER: modeSwitcherLayout = {
-    'add': addTagToActive,
-    'remove': removeTagFromActive
+    'add': addTagToMany,
+    'remove': removeTagFromMany
 }
 
 
@@ -21,7 +21,7 @@ type tagGathererLayout = {
 
 const TAG_GATHERER: tagGathererLayout = {
     'add': getTagList,
-    'remove': getTagsOnActive
+    'remove': getTagsOnFiles
 }
 
 
@@ -31,13 +31,15 @@ export class QuickTagSelector extends FuzzySuggestModal<string> {
     tagArray: Function | undefined
     confirm: boolean
     settings: QuickTaggerSettings
+    fileList: TFile[]
 
     
-    constructor (app: App, settings: QuickTaggerSettings, mode: string){
+    constructor (app: App, settings: QuickTaggerSettings, fileList: Array<TFile>, mode: string){
         super(app)
         this.func = MODE_SWITCHER[mode as keyof modeSwitcherLayout]
         this.tagArray = TAG_GATHERER[mode as keyof tagGathererLayout]
         this.settings = settings
+        this.fileList = fileList
     }
 
     getItems() {
@@ -45,7 +47,7 @@ export class QuickTagSelector extends FuzzySuggestModal<string> {
             new Notice("Error: Could not find tags!")
             return []
         }
-        var results = this.tagArray(app, this.settings)
+        var results = this.tagArray(app, this.settings, this.fileList)
         return results
     }
 
@@ -63,7 +65,7 @@ export class QuickTagSelector extends FuzzySuggestModal<string> {
             this.confirm = true
         }
         if (this.confirm && this.func){
-            this.func(tag.replace('#', ''))
+            this.func(this.fileList, tag.replace('#', ''))
         }
     }
 }
@@ -79,7 +81,7 @@ class ConfirmRemoveAllModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-        contentEl.createEl("h1", { text: "This will delete all tags on the current note, are you certain?" })
+        contentEl.createEl("h1", { text: "This will delete all tags on the current note(s), are you certain?" })
 		
         new Setting(contentEl).addButton((btn) =>
           btn
