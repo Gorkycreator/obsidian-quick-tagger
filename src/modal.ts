@@ -1,11 +1,12 @@
 import { App, FuzzySuggestModal, Modal, Setting, Notice, TFile } from "obsidian";
-import {addTagToMany, getTagList, getTagsOnFiles, removeTagFromMany} from "./utilities"
+import {addTagToMany, getTagList, getTagsOnFiles, removeTagFromMany, getFilteredWithoutTag, getFilteredWithTag} from "./utilities"
 import {QuickTaggerSettings} from "./main"
+export {QuickTagSelector, ConfirmModal}
 
 
 type modeSwitcherLayout = {
     add: Function;
-    remove?: Function;
+    remove: Function;
 }
 
 const MODE_SWITCHER: modeSwitcherLayout = {
@@ -14,32 +15,36 @@ const MODE_SWITCHER: modeSwitcherLayout = {
 }
 
 
-type tagGathererLayout = {
-    add: Function;
-    remove?: Function;
-}
-
-const TAG_GATHERER: tagGathererLayout = {
+const TAG_GATHERER: modeSwitcherLayout = {
     'add': getTagList,
     'remove': getTagsOnFiles
 }
 
 
-export class QuickTagSelector extends FuzzySuggestModal<string> {
+const TAG_FILTER: modeSwitcherLayout = {
+    'add': getFilteredWithoutTag,
+    'remove': getFilteredWithTag
+}
+
+
+class QuickTagSelector extends FuzzySuggestModal<string> {
     mode: string
-    func: Function | undefined
-    tagArray: Function | undefined
+    func: Function
+    tagArray: Function
     confirm: boolean
     settings: QuickTaggerSettings
     fileList: TFile[]
+    fileFilter: Function
 
     
     constructor (app: App, settings: QuickTaggerSettings, fileList: Array<TFile>, mode: string){
         super(app)
         this.func = MODE_SWITCHER[mode as keyof modeSwitcherLayout]
-        this.tagArray = TAG_GATHERER[mode as keyof tagGathererLayout]
+        this.tagArray = TAG_GATHERER[mode as keyof modeSwitcherLayout]
+        this.fileFilter = TAG_FILTER[mode as keyof modeSwitcherLayout]
         this.settings = settings
         this.fileList = fileList
+        this.mode = mode
     }
 
     getItems() {
@@ -57,31 +62,48 @@ export class QuickTagSelector extends FuzzySuggestModal<string> {
 
     // Perform action on the selected suggestion
     async onChooseItem(tag: string, evt: MouseEvent | KeyboardEvent) {
+        this.confirm = true
+        var applicableFiles = this.fileFilter(this.fileList, tag)
+        var mode = this.mode
+
+        if (applicableFiles.length == 0){
+            new Notice("No file tags to change!")
+            return
+        }
+
         if (tag == "REMOVE ALL"){
-            this.confirm = await new Promise((resolve, reject) => {  // add a promise to wait for confirmation
-                new ConfirmRemoveAllModal(app, (result) => (resolve(this.confirm = result))).open()
+            var msg = "This will delete all tags on the current note(s), are you certain?"
+            await new Promise((resolve) => {  // add a promise to wait for confirmation
+                new ConfirmModal(app, (result) => (resolve(this.confirm = result)), msg).open()
             })
-        } else {
-            this.confirm = true
+            mode = ""
+        }
+        if (this.fileList.length > 1){
+            var msg = "You are about to " + mode + " " + tag + " (" + applicableFiles.length + " notes), are you certain?"
+            await new Promise((resolve) => {  // add a promise to wait for confirmation
+                new ConfirmModal(app, (result) => (resolve(this.confirm = result)), msg).open()
+            })
         }
         if (this.confirm && this.func){
-            this.func(this.fileList, tag.replace('#', ''))
+            this.func(applicableFiles, tag.replace('#', ''))
         }
     }
 }
 
 
-class ConfirmRemoveAllModal extends Modal {
+class ConfirmModal extends Modal {
     onSubmit: (result: boolean) => void;
+    message: string
 
-	constructor(app: App, onSubmit: (result: boolean) => void) {
+	constructor(app: App, onSubmit: (result: boolean) => void, message: string) {
 		super(app);
         this.onSubmit = onSubmit
+        this.message = message
 	}
 
 	onOpen() {
 		const { contentEl } = this;
-        contentEl.createEl("h1", { text: "This will delete all tags on the current note(s), are you certain?" })
+        contentEl.createEl("h1", { text: this.message })
 		
         new Setting(contentEl).addButton((btn) =>
           btn

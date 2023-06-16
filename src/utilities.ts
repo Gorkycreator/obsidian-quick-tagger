@@ -1,9 +1,10 @@
 import{parseYaml, stringifyYaml, MarkdownView, Notice, getAllTags, App, Plugin, TFile, parseFrontMatterTags } from 'obsidian'
 import {QuickTaggerSettings} from "./main"
-export { getActiveFile, addTagToMany, collectExistingTags, getTagList, removeTagFromMany, getTagsOnFiles }
+export { getActiveFile, addTagToMany, collectExistingTags, getTagList, removeTagFromMany, getTagsOnFiles, getFilteredWithoutTag, getFilteredWithTag }
 
 const tag_key = 'tags'
 const tag_cleanup = ['tag', 'Tag', 'Tags']
+const SPECIAL_COMMANDS = ['REMOVE ALL']
 
 
 /**
@@ -62,7 +63,11 @@ async function removeTagFromMany(files:TFile[], tag:string){
 		})
 	})
 	if(files.length > 1){
-		new Notice('"' + tag + '" removed from ' + files.length + ' notes')
+		if (tag == "REMOVE ALL"){
+			new Notice('All tags removed from ' + files.length + ' notes')
+		} else{
+			new Notice('"' + tag + '" removed from ' + files.length + ' notes')
+		}
 	}
 }
 
@@ -95,7 +100,7 @@ function removeTag(thisFile: TFile, tag:string){
 			tags.splice(indx, 1)
 		}
 	}
-	if (tag == "REMOVE ALL"){  // TODO: add confirmation dialog for this one...
+	if (tag == "REMOVE ALL"){
 		processor = (frontmatter: object) => {
 			frontmatter = collectExistingTags(frontmatter)
 			frontmatter[tag_key] = []
@@ -198,4 +203,29 @@ function getTagsOnFiles(app: App, settings: QuickTaggerSettings, fileList:TFile[
 	})
 	tag_array.push('REMOVE ALL')
 	return tag_array
+}
+
+
+function getFilteredWithoutTag(fileList:TFile[], tag:string){
+	if (SPECIAL_COMMANDS.includes(tag)){ return fileList }
+	var resultList = fileList.filter(file => filterTag(file, tag) == false)
+	return resultList
+}
+
+
+function getFilteredWithTag(fileList:TFile[], tag:string){
+	if (SPECIAL_COMMANDS.includes(tag)){ return fileList }
+	var resultList = fileList.filter(file => filterTag(file, tag) == true)
+	return resultList
+}
+
+
+function filterTag(thisFile: TFile, tag: string){
+	var cache = this.app.metadataCache.getFileCache(thisFile)
+	var existing_tags = parseFrontMatterTags(cache.frontmatter)
+	if (existing_tags?.includes(tag)){
+		return true
+	} else {
+		return false
+	}
 }

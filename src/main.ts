@@ -1,5 +1,5 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, SliderComponent } from 'obsidian';
-import { QuickTagSelector } from './modal'
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, TFile, PluginSettingTab, Setting, SliderComponent, SearchResult, sortSearchResults } from 'obsidian';
+import { QuickTagSelector, ConfirmModal } from './modal'
 import { getActiveFile, collectExistingTags } from './utilities';
 
 export interface QuickTaggerSettings {
@@ -80,7 +80,7 @@ export default class QuickTagPlugin extends Plugin {
 			this.app.workspace.on("files-menu", (menu, files) => {
 				menu.addItem((item) =>{
 					item
-					  .setTitle("Tag files with...")
+					  .setTitle("Tag " + files.length + " files with...")
 					  .setIcon("tag")
 					  .onClick(() => {
 						new QuickTagSelector(this.app, this.settings, files, 'add').open()
@@ -93,7 +93,7 @@ export default class QuickTagPlugin extends Plugin {
 			this.app.workspace.on("files-menu", (menu, files) => {
 				menu.addItem((item) =>{
 					item
-					  .setTitle("Remove Tags...")
+					  .setTitle("Remove Tag(s)...")
 					  .setIcon("tag")
 					  .onClick(() => {
 						new QuickTagSelector(this.app, this.settings, files, 'remove').open()
@@ -102,6 +102,64 @@ export default class QuickTagPlugin extends Plugin {
 			})
 		)
 
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, file) => {
+				menu.addItem((item) =>{
+					item
+					  .setTitle("Tag file with...")
+					  .setIcon("tag")
+					  .onClick(() => {
+						new QuickTagSelector(this.app, this.settings, [file], 'add').open()
+					  })
+				})
+			})
+		)
+
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, file) => {
+				menu.addItem((item) =>{
+					item
+					  .setTitle("Remove Tag(s)...")
+					  .setIcon("tag")
+					  .onClick(() => {
+						new QuickTagSelector(this.app, this.settings, [file], 'remove').open()
+					  })
+				})
+			})
+		)
+
+		// Search Results menu commands
+		this.registerEvent(
+			this.app.workspace.on("search:results-menu", (menu, leaf) => {
+				var files = [] as TFile[]
+				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this
+
+				menu.addItem((item) =>{
+					item
+					  .setTitle("Add Tags to " + files.length + " notes...")
+					  .setIcon("tag")
+					  .onClick(() => {
+						new QuickTagSelector(this.app, this.settings, files, 'add').open()
+					  })
+				})
+			})
+		)
+
+		this.registerEvent(
+			this.app.workspace.on("search:results-menu", (menu, leaf) => {
+				var files = [] as TFile[]
+				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this
+
+				menu.addItem((item) =>{
+					item
+					  .setTitle("Remove Tags from " + files.length + " notes...")
+					  .setIcon("tag")
+					  .onClick(() => {						
+						new QuickTagSelector(this.app, this.settings, files, 'remove').open()
+					  })
+				})
+			})
+		)
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new QuickTagSettingTab(this.app, this));
