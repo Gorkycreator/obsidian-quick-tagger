@@ -19,7 +19,7 @@ Note that this demo was recorded with buttons added to the title bar via Obsidia
 ### Menu options
 ![file-menu](images/file-right-click-menu.png)
 
-![search-menu](search-results-menu.png)
+![search-menu](images/search-results-menu.png)
 
 ## Disclaimer
 This plugin is provided as-is, use at your own risk. I've tested it personally and use it on my vault but I can't confirm it's foolproof in every situation.
