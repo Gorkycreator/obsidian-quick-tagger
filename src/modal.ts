@@ -1,6 +1,7 @@
-import { App, FuzzySuggestModal, Modal, Setting, Notice, TFile } from "obsidian";
-import {addTagToMany, getTagList, getTagsOnFiles, removeTagFromMany, getFilteredWithoutTag, getFilteredWithTag} from "./utilities"
-import {QuickTaggerSettings} from "./main"
+import { App, FuzzySuggestModal, Modal, Setting, Notice, TFile, Plugin } from "obsidian";
+import {addTagToMany, getTagList, getTagsOnFiles, removeTagFromMany, getFilteredWithoutTag, getFilteredWithTag, onlyFiles} from "./utilities"
+import QuickTagPlugin, {QuickTaggerSettings} from "./main"
+import { PassThrough } from "stream";
 export {QuickTagSelector, ConfirmModal}
 
 
@@ -28,6 +29,7 @@ const TAG_FILTER: modeSwitcherLayout = {
 
 
 class QuickTagSelector extends FuzzySuggestModal<string> {
+    plugin: Plugin
     mode: string
     func: Function
     tagArray: Function
@@ -35,23 +37,29 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
     settings: QuickTaggerSettings
     fileList: TFile[]
     fileFilter: Function
+    showDialogs: Function
+    applicableFiles: TFile[]
 
     
-    constructor (app: App, settings: QuickTaggerSettings, fileList: Array<TFile>, mode: string){
-        super(app)
+    constructor (plugin: QuickTagPlugin, fileList: Array<TFile>, mode: string){
+        super(plugin.app)
+        this.plugin = plugin
         this.func = MODE_SWITCHER[mode as keyof modeSwitcherLayout]
         this.tagArray = TAG_GATHERER[mode as keyof modeSwitcherLayout]
         this.fileFilter = TAG_FILTER[mode as keyof modeSwitcherLayout]
-        this.settings = settings
+        this.settings = plugin.settings
         this.fileList = fileList
         this.mode = mode
+        this.applicableFiles = []
+        this.confirm = true
     }
 
     getItems() {
         if(!this.tagArray){
             new Notice("Error: Could not find tags!")
             return []
-        }
+        } 
+
         var results = this.tagArray(app, this.settings, this.fileList)
         return results
     }
@@ -62,30 +70,55 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
 
     // Perform action on the selected suggestion
     async onChooseItem(tag: string, evt: MouseEvent | KeyboardEvent) {
-        this.confirm = true
-        var applicableFiles = this.fileFilter(this.fileList, tag)
-        var mode = this.mode
+        this.applicableFiles = this.fileFilter(this.fileList, tag)
 
-        if (applicableFiles.length == 0){
+        if (this.applicableFiles.length == 0){
             new Notice("No file tags to change!")
             return
         }
 
-        if (tag == "REMOVE ALL"){
-            var msg = "This will delete all tags on the current note(s), are you certain?"
-            await new Promise((resolve) => {  // add a promise to wait for confirmation
-                new ConfirmModal(app, (result) => (resolve(this.confirm = result)), msg).open()
-            })
-            mode = ""
-        }
-        if (this.fileList.length > 1){
-            var msg = "You are about to " + mode + " " + tag + " (" + applicableFiles.length + " notes), are you certain?"
-            await new Promise((resolve) => {  // add a promise to wait for confirmation
-                new ConfirmModal(app, (result) => (resolve(this.confirm = result)), msg).open()
-            })
-        }
+        await this.addDialogs(tag)
+
         if (this.confirm && this.func){
-            this.func(applicableFiles, tag.replace('#', ''))
+            await this.func(this.applicableFiles, tag.replace('#', ''), this.plugin).then(
+                () => this.confirmationNotification(tag)
+            )
+        }
+    }
+
+
+    async addDialogs(tag:string) {
+        var verb = this.mode
+        var tofrom = this.mode == 'add' ? " to " : " from "
+        var quantity = this.applicableFiles.length
+
+        if (tag == "REMOVE ALL"){
+            var msg = "This will delete all tags on the current note(s), are you sure?"
+            await new Promise((resolve) => {  // add a promise to wait for confirmation
+                new ConfirmModal(app, (result) => (resolve(this.confirm = result)), msg).open()
+            })
+            verb = ""
+        }
+        if (quantity > 1){
+            var msg = "You are about to " + 
+                      verb + " " +
+                      tag +
+                      tofrom +
+                      quantity + " notes, are you sure?"
+            await new Promise((resolve) => {  // add a promise to wait for confirmation
+                new ConfirmModal(app, (result) => (resolve(this.confirm = result)), msg).open()
+            })
+        }
+        return this.confirm
+    }
+
+    confirmationNotification(tag:string){
+        var notes = this.applicableFiles.length > 1 ? this.applicableFiles.length + " notes" : this.applicableFiles[0].basename
+        var tofrom = this.mode == 'add' ? " added to " : " removed from "
+        if (tag == "REMOVE ALL"){
+            new Notice("All tags removed from " + notes)
+        } else {
+            new Notice(tag + tofrom + notes)
         }
     }
 }

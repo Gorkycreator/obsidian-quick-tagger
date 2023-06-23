@@ -1,6 +1,6 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, TFile, PluginSettingTab, Setting, SliderComponent, SearchResult, sortSearchResults } from 'obsidian';
 import { QuickTagSelector, ConfirmModal } from './modal'
-import { getActiveFile, collectExistingTags } from './utilities';
+import { getActiveFile, collectExistingTags, onlyTaggableFiles } from './utilities';
 
 export interface QuickTaggerSettings {
 	tags: string;
@@ -18,18 +18,19 @@ export default class QuickTagPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		
+		
 
-		/*
 		//Ribbon Icons
 		const addTagRibbonIcon = this.addRibbonIcon('tag', 'Add Tag to Current Note', (evt: MouseEvent) => {
-			new QuickTagSelector(this.app, this.settings, 'add').open();
+			var currentFile = getActiveFile()
+			new QuickTagSelector(this, currentFile, 'add').open();
 		});
 
 		const removeTagRibbonIcon = this.addRibbonIcon('x-square', 'Remove Tag from Current Note', (evt: MouseEvent) => {
-			new QuickTagSelector(this.app, this.settings, 'remove').open();
+			var currentFile = getActiveFile()
+			new QuickTagSelector(this, currentFile, 'remove').open();
 		});
 
-		*/
 
 		// Command Pallet Commands
 		this.addCommand({
@@ -37,7 +38,7 @@ export default class QuickTagPlugin extends Plugin {
 			name: 'Add Tag',
 			callback: () => {
 				var currentFile = getActiveFile()
-				new QuickTagSelector(this.app, this.settings, currentFile, 'add').open()
+				new QuickTagSelector(this, currentFile, 'add').open()
 			}
 		});
 
@@ -46,7 +47,7 @@ export default class QuickTagPlugin extends Plugin {
 			name: 'Remove Tag',
 			callback: () => {
 				var currentFile = getActiveFile()
-				new QuickTagSelector(this.app, this.settings, currentFile, 'remove').open()
+				new QuickTagSelector(this, currentFile, 'remove').open()
 			}
 		});
 
@@ -65,25 +66,17 @@ export default class QuickTagPlugin extends Plugin {
 			}
 		})
 
-		this.addCommand({
-			id: 'test-add-tag',
-			name: 'debug add',
-			callback: () => {
-				console.log("DEBUG TEST!!!!")
-				addTagToActive('myTest')
-			}
-		})
-
-
 		// File Context menu commands
 		this.registerEvent(
 			this.app.workspace.on("files-menu", (menu, files) => {
+				files = onlyTaggableFiles(files)
+				if(files.length < 1){return}
 				menu.addItem((item) =>{
 					item
 					  .setTitle("Tag " + files.length + " files with...")
 					  .setIcon("tag")
 					  .onClick(() => {
-						new QuickTagSelector(this.app, this.settings, files, 'add').open()
+						new QuickTagSelector(this, files, 'add').open()
 					  })
 				})
 			})
@@ -91,12 +84,14 @@ export default class QuickTagPlugin extends Plugin {
 
 		this.registerEvent(
 			this.app.workspace.on("files-menu", (menu, files) => {
+				files = onlyTaggableFiles(files)
+				if(files.length < 1){return}
 				menu.addItem((item) =>{
 					item
-					  .setTitle("Remove Tag(s)...")
+					  .setTitle("Remove Tag from " + files.length + " files...")
 					  .setIcon("tag")
 					  .onClick(() => {
-						new QuickTagSelector(this.app, this.settings, files, 'remove').open()
+						new QuickTagSelector(this, files, 'remove').open()
 					  })
 				})
 			})
@@ -104,12 +99,16 @@ export default class QuickTagPlugin extends Plugin {
 
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
+				var thisFile = onlyTaggableFiles([file])
+				if(thisFile.length < 1){return} else {file = thisFile[0]}
 				menu.addItem((item) =>{
 					item
 					  .setTitle("Tag file with...")
 					  .setIcon("tag")
 					  .onClick(() => {
-						new QuickTagSelector(this.app, this.settings, [file], 'add').open()
+						var filteredFile = onlyTaggableFiles([file])
+						if(filteredFile.length < 1){return}
+						new QuickTagSelector(this, filteredFile, 'add').open()
 					  })
 				})
 			})
@@ -117,12 +116,16 @@ export default class QuickTagPlugin extends Plugin {
 
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
+				var thisFile = onlyTaggableFiles([file])
+				if(thisFile.length < 1){return} else {file = thisFile[0]}
 				menu.addItem((item) =>{
 					item
 					  .setTitle("Remove Tag(s)...")
 					  .setIcon("tag")
 					  .onClick(() => {
-						new QuickTagSelector(this.app, this.settings, [file], 'remove').open()
+						var filteredFile = onlyTaggableFiles([file])
+						if(filteredFile.length < 1){return}
+						new QuickTagSelector(this, filteredFile, 'remove').open()
 					  })
 				})
 			})
@@ -133,13 +136,15 @@ export default class QuickTagPlugin extends Plugin {
 			this.app.workspace.on("search:results-menu", (menu, leaf) => {
 				var files = [] as TFile[]
 				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this
+				files = onlyTaggableFiles(files)
+				if(files.length < 1){return}
 
 				menu.addItem((item) =>{
 					item
 					  .setTitle("Add Tags to " + files.length + " notes...")
 					  .setIcon("tag")
 					  .onClick(() => {
-						new QuickTagSelector(this.app, this.settings, files, 'add').open()
+						new QuickTagSelector(this, files, 'add').open()
 					  })
 				})
 			})
@@ -149,13 +154,15 @@ export default class QuickTagPlugin extends Plugin {
 			this.app.workspace.on("search:results-menu", (menu, leaf) => {
 				var files = [] as TFile[]
 				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this
-
+				files = onlyTaggableFiles(files)
+				if(files.length < 1){return}
+				
 				menu.addItem((item) =>{
 					item
 					  .setTitle("Remove Tags from " + files.length + " notes...")
 					  .setIcon("tag")
 					  .onClick(() => {						
-						new QuickTagSelector(this.app, this.settings, files, 'remove').open()
+						new QuickTagSelector(this, files, 'remove').open()
 					  })
 				})
 			})

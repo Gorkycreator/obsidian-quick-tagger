@@ -1,10 +1,12 @@
 import{parseYaml, stringifyYaml, MarkdownView, Notice, getAllTags, App, Plugin, TFile, parseFrontMatterTags } from 'obsidian'
-import {QuickTaggerSettings} from "./main"
-export { getActiveFile, addTagToMany, collectExistingTags, getTagList, removeTagFromMany, getTagsOnFiles, getFilteredWithoutTag, getFilteredWithTag }
+import QuickTagPlugin, {QuickTaggerSettings} from "./main"
+export { getActiveFile, addTagToMany, collectExistingTags, getTagList, removeTagFromMany, getTagsOnFiles, getFilteredWithoutTag, getFilteredWithTag,
+	onlyTaggableFiles }
 
 const tag_key = 'tags'
 const tag_cleanup = ['tag', 'Tag', 'Tags']
 const SPECIAL_COMMANDS = ['REMOVE ALL']
+const WOAH_LOTS_OF_FILES = 100
 
 
 /**
@@ -27,14 +29,11 @@ function getActiveFile() {
  * @param thisFile the file to edit
  * @param tag the tag to add
  */
-function addTag(thisFile: TFile, tag: string){
-	this.app.fileManager.processFrontMatter(thisFile, (frontmatter: object) => {
-		frontmatter = collectExistingTags(frontmatter)
-		if(!frontmatter[tag_key].includes(tag)){
-			frontmatter[tag_key].push(tag)
-		} else {
-			new Notice(thisFile?.basename + ' already tagged with "#' + tag + '"')
-		}
+async function addTag(thisFile: TFile, tag: string){
+	await cleanFile(thisFile)
+	await this.app.fileManager.processFrontMatter(thisFile, (frontmatter: object) => {
+		frontmatter = collectExistingTags(frontmatter);
+		frontmatter[tag_key].push(tag)
 	})
 }
 
@@ -42,46 +41,83 @@ function addTag(thisFile: TFile, tag: string){
 /**
  * Loops over files and adds tags
  * @param files array of files to edit
- * @param tag tag to add to them
+ * @param tag tag to add
+ * @param plugin a reference to the plugin (used to update status bar)
  */
-async function addTagToMany(files:Array<TFile>, tag:string){
-	await cleanFiles(files).then(() => {
-		files.forEach((f) => {
-			addTag(f, tag)
-		})
-	})
-	if(files.length > 1){
-		new Notice(files.length + ' notes tagged with "#' + tag + '"')
-	}
-}
-
-
-async function removeTagFromMany(files:TFile[], tag:string){
-	await cleanFiles(files).then(() => {
-		files.forEach((f) => {
-			removeTag(f, tag)
-		})
-	})
-	if(files.length > 1){
-		if (tag == "REMOVE ALL"){
-			new Notice('All tags removed from ' + files.length + ' notes')
-		} else{
-			new Notice('"' + tag + '" removed from ' + files.length + ' notes')
-		}
-	}
+async function addTagToMany(files:TFile[], tag:string, plugin: QuickTagPlugin){
+	console.log("ADDING TAGS")
+	await apply_bulk_changes(files, tag, plugin, addTag)
 }
 
 
 /**
- * processFrontMatter does not work if there are newlines before the metadata. Clear all newlines at the start of the document
+ * Loops over files and removes tags
+ * @param files array of files to edit
+ * @param tag tag to remove
+ * @param plugin a reference to the plugin (used to update status bar)
+ */
+async function removeTagFromMany(files:TFile[], tag:string, plugin: QuickTagPlugin){
+	console.log("REMOVING TAGS")
+	await apply_bulk_changes(files, tag, plugin, removeTag)
+}
+
+
+/**
+ * Consolidates the bulk processing for add/remove
+ * @param files 
+ * @param tag 
+ * @param plugin 
+ * @param func 
+ */
+async function apply_bulk_changes(files:TFile[], tag:string, plugin:QuickTagPlugin, func:Function){
+	var logger = plugin.addStatusBarItem();
+	logger.createEl("span")
+	var useStatusBar = false
+	if (files.length > WOAH_LOTS_OF_FILES){
+		new Notice("Processing " + files.length + " files... This might take a while. See status bar for progress.")
+		useStatusBar = true
+	}
+	for (var i=0; i<files.length; i++){
+		if(useStatusBar){
+			logger.setText(`Processing ${tag}: ${i + 1}/${files.length}`)
+		}
+		await func(files[i], tag)
+	}
+
+	logger.remove()
+}
+
+
+
+/**
+ * processFrontMatter does not work if there are newlines before the metadata
+ * or spaces after the second set of dashes. Fix these problems.
  * @param fileList 
  */
-async function cleanFiles(fileList:TFile[]){
-	for(const f of fileList){
-		let text = await this.app.vault.read(f)
+async function cleanFile(f:TFile){
+	let text = await this.app.vault.read(f)
+	var modified = false
+
+	// first check newlines
+	if(text[0] == '\n'){
 		while(text[0] == '\n'){
 			text = text.slice(1)
 		}
+		modified = true
+	}
+
+	// then check to make sure we have our yaml guiderails
+	if(text.indexOf("---\n") == 0){
+		var matches = text.match(/---\s*\n?/g)
+		if(matches[1] != "---\n" && matches[1] != "---"){  // if our second match isn't clean, fix it!
+			text = text.replace(matches[1], "---\n")
+			modified = true
+		}
+	}
+
+	// if anything was changed, write it back to the file
+	if(modified){
+		console.log(`fixing up broken parts of ${f.basename}'s yaml...`)
 		await this.app.vault.modify(f, text)
 	}
 }
@@ -91,7 +127,8 @@ async function cleanFiles(fileList:TFile[]){
  * Remove a tag from a note
  * @param tag the tag to remove
  */
-function removeTag(thisFile: TFile, tag:string){
+async function removeTag(thisFile: TFile, tag:string){
+	await cleanFile(thisFile)
 	var processor = (frontmatter: object) => {
 		frontmatter = collectExistingTags(frontmatter)
 		var tags = frontmatter[tag_key]
@@ -102,11 +139,10 @@ function removeTag(thisFile: TFile, tag:string){
 	}
 	if (tag == "REMOVE ALL"){
 		processor = (frontmatter: object) => {
-			frontmatter = collectExistingTags(frontmatter)
 			frontmatter[tag_key] = []
 		}
 	}
-	this.app.fileManager.processFrontMatter(thisFile, processor)
+	await this.app.fileManager.processFrontMatter(thisFile, processor)
 }
 
 
@@ -116,7 +152,6 @@ function removeTag(thisFile: TFile, tag:string){
  * @returns - a single modified yaml dict
  */
 function collectExistingTags(yml:any){
-	console.log(yml)
 	// make the desired key, if it does not exist
 	if (!yml.hasOwnProperty(tag_key)){
 		yml[tag_key] = []
@@ -148,6 +183,9 @@ function collectExistingTags(yml:any){
  */
 function conformToArray(input:string | Array<string>){
 	var output = typeof(input) === 'string' ? input.split(',').map(e => e.trim()) : input
+    if (output.length == 1){
+		output = output[0].split(' ').map(e => e.trim())
+	}
 	return output ? output : []
 }
 
@@ -193,7 +231,6 @@ function getTagsOnFiles(app: App, settings: QuickTaggerSettings, fileList:TFile[
 	fileList.forEach((f) =>{
 		var cache = this.app.metadataCache.getFileCache(f)
 		var new_tags = parseFrontMatterTags(cache.frontmatter)
-		console.log(new_tags)
 		if(new_tags){
 			new_tags.map((e) => e.replace('#', '')).filter((e) => e).map((e) => '#' + e)
 			new_tags.forEach((item) =>{
@@ -228,4 +265,13 @@ function filterTag(thisFile: TFile, tag: string){
 	} else {
 		return false
 	}
+}
+
+function onlyTaggableFiles(fileList: TFile[]){
+	var resultList = fileList.filter(file => isFile(file) == true && file.extension == "md")
+	return resultList
+}
+
+function isFile(thisFile: TFile){
+	return thisFile.extension ? true : false
 }
