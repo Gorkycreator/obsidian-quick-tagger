@@ -1,7 +1,9 @@
 import{parseYaml, stringifyYaml, MarkdownView, Notice, getAllTags, App, Plugin, TFile, parseFrontMatterTags } from 'obsidian'
-import QuickTagPlugin, {QuickTaggerSettings} from "./main"
+import QuickTagPlugin, {QuickTaggerSettings, PriorityTag} from "./main"
+import { QuickTagSelector } from './modal'
+import { getPriority } from 'os'
 export { getActiveFile, addTagToMany, collectExistingTags, getTagList, removeTagFromMany, getTagsOnFiles, getFilteredWithoutTag, getFilteredWithTag,
-	onlyTaggableFiles }
+	onlyTaggableFiles, selectTag, getNonStarredTags }
 
 const tag_key = 'tags'
 const tag_cleanup = ['tag', 'Tag', 'Tags']
@@ -196,9 +198,9 @@ function conformToArray(input:string | Array<string>){
  * @param settings 
  * @returns 
  */
-function getTagList(app: App, settings: QuickTaggerSettings, fileList:TFile[]){
+function getTagList(app: App, settings: QuickTaggerSettings, fileList?:TFile[]){
 	// TODO: add filtering to remove tags that are already on the active file?
-	var tagSettings = conformToArray(settings.tags)
+	var tagSettings = getPriorityTags(settings, 'cut_in_line')
 	var tag_array = tagSettings.map((e) => e.replace('#', ''))
 	                           .filter((e) => e)
 							   .map((e) => '#' + e)
@@ -207,15 +209,41 @@ function getTagList(app: App, settings: QuickTaggerSettings, fileList:TFile[]){
 		return tag_array
 	}
 	
-  var tag_dict = app.metadataCache.getTags()
-	for (const key in tag_dict) {
-		if (tag_dict.hasOwnProperty(key)) {
-			if (tag_array.indexOf(key) == -1){
-				tag_array.push(key)
-			}
+    var tag_cache = getTagsFromAppCache()
+	tag_cache.sort()
+	tag_cache.forEach(tag => {
+		if (tag_array.indexOf(tag) == -1){
+			tag_array.push(tag)
 		}
-	}
+	})
 	return tag_array
+}
+
+
+function getNonStarredTags(app: App, settings: QuickTaggerSettings, fileList?:TFile[]){
+	var tag_array = getTagsFromAppCache()
+	console.log(tag_array)
+	var starredTags = getPriorityTags(settings)
+	starredTags.forEach(t => tag_array.remove(t))
+	tag_array.sort()
+	return tag_array
+}
+
+
+
+function getTagsFromAppCache(){
+	var results = [] as string[]
+	for (const key in app.metadataCache.getTags()){
+		results.push(key)
+	}
+	return results
+}
+
+
+function getPriorityTags(settings: QuickTaggerSettings, filter?:string){
+	var results = [] as string[]
+	settings.priorityTags.forEach(t => filter ? t[filter as keyof PriorityTag] ? results.push(t.tag_value) : null : results.push(t.tag_value))
+	return results
 }
 
 
@@ -274,4 +302,19 @@ function onlyTaggableFiles(fileList: TFile[]){
 
 function isFile(thisFile: TFile){
 	return thisFile.extension ? true : false
+}
+
+
+async function selectTag(plugin: QuickTagPlugin): Promise<string>{
+	return new Promise((resolve, reject) => {
+		const modal = new QuickTagSelector(plugin, [], 'select');
+
+		// overwrite onChooseItem method so that we can nab the tag when it's selected and pass it back
+		modal.onChooseItem = (tag: string) => {
+			console.log("SELCT TAG FUNCTION")
+			console.log(tag)
+			resolve(tag)
+		}
+		modal.open()
+	})
 }

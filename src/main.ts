@@ -1,15 +1,24 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, TFile, PluginSettingTab, Setting, SliderComponent, SearchResult, sortSearchResults } from 'obsidian';
 import { QuickTagSelector, ConfirmModal } from './modal'
-import { getActiveFile, collectExistingTags, onlyTaggableFiles } from './utilities';
+import { getActiveFile, collectExistingTags, onlyTaggableFiles, selectTag } from './utilities';
+
+
+export interface PriorityTag {
+	tag_value: string
+	cut_in_line: boolean
+	status_bar: boolean
+	add_command: boolean
+	right_click: boolean
+}
 
 export interface QuickTaggerSettings {
-	tags: string;
 	all_tags: boolean;
+	priorityTags: PriorityTag[]
 }
 
 const DEFAULT_SETTINGS: QuickTaggerSettings = {
-	tags: '',
-	all_tags: true
+	all_tags: true,
+	priorityTags: [{tag_value:"test", cut_in_line:false, status_bar:false, add_command:false, right_click:false}]
 }
 
 export default class QuickTagPlugin extends Plugin {
@@ -211,24 +220,157 @@ class QuickTagSettingTab extends PluginSettingTab {
 		containerEl.createEl('h2', {text: 'Quick Tagger Settings'});
 
 		new Setting(containerEl)
-			.setName('Priority Tags')
-			.setDesc('Priority tags to show up at the top of the list, in the order listed here. Seperate tags with commas.')
-			.addTextArea(text => text
-				.setPlaceholder('Enter tags seperated by commas.')
-				.setValue(this.plugin.settings.tags)
-				.onChange(async (value) => {
-					console.log('Updated tags: ' + value);
-					this.plugin.settings.tags = value;
-					await this.plugin.saveSettings();
-				}));
-		new Setting(containerEl)
 			.setName('Use All Tags')
-			.setDesc('If disabled, only Priority Tags will be shown')
+			.setDesc('If disabled, only Starred Tags will be shown in the tag selector dialog.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.all_tags)
 				.onChange(async (value) => {
 					this.plugin.settings.all_tags = value;
 					await this.plugin.saveSettings();
 			}));
+
+		containerEl.createEl('h1', { text: 'Starred Tags' });
+		containerEl.createEl('h2', "hello")
+		const starredDiv = containerEl.createDiv();
+		this.drawPriorityTags(starredDiv);
+		new Setting(containerEl)
+		    .addButton(btn => btn
+			    .setTooltip("Add a priority tag")
+				.setIcon("plus")
+				.onClick(async () => {
+					let thisTag = await selectTag(this.plugin)
+					
+					console.log("SETTING FUNCTION")
+					// console.log(selectedTag)
+					this.plugin.settings.priorityTags.push({
+						tag_value: thisTag,
+						cut_in_line: true,
+						add_command: false,
+						status_bar: false,
+						right_click: false
+					})
+					await this.plugin.saveSettings();
+					this.drawPriorityTags(starredDiv)
+				}))
+	}
+
+	drawPriorityTags(div: HTMLElement) {
+		div.empty();
+		const priorityTags = this.plugin.settings.priorityTags
+		new Setting(div)
+		        .addButton(btn => {
+					btn.setIcon('star');
+					var msg = "The first toggle on a starred tag moves it to the top of the list when selecting a tag for your notes.";
+					btn.onClick(() => new Notice(msg))
+					btn.setTooltip(msg)
+				})
+				.addButton(btn => {btn.setIcon('chevron-right-square');
+					var msg = "The second toggle on a starred tag adds a command for it so you can create a hotkey, etc.  --- NOT IMPLEMENTED";
+					btn.onClick(() => new Notice(msg))
+					btn.setTooltip(msg)
+				})
+				.addButton(btn => {btn.setIcon('martini');
+					var msg = "The third toggle on a starred tag adds a button for it to the status bar.  --- NOT IMPLEMENTED";
+					btn.onClick(() => new Notice(msg))
+					btn.setTooltip(msg)
+				})
+				.addButton(btn => {btn.setIcon('mouse-pointer-click');
+					var msg = "The fourth toggle on a starred tag adds it to the context menu.  --- NOT IMPLEMENTED";
+					btn.onClick(() => new Notice(msg))
+					btn.setTooltip(msg)
+				})
+				.addButton(btn => {btn.setIcon('up-arrow-with-tail');
+					var msg = "The up arrow button moves the starred tag up on the starred tag list. This affects the order it's displayed in the tag selection dialog.";
+					btn.onClick(() => new Notice(msg))
+					btn.setTooltip(msg)
+				})
+				.addButton(btn => {btn.setIcon('down-arrow-with-tail');
+					var msg = "The down arrow button moves the starred tag down on the starred tag list. This affects the order it's displayed in the tag selection dialog.";
+					btn.onClick(() => new Notice(msg))
+					btn.setTooltip(msg)
+				})
+				.addButton(btn => {btn.setIcon('trash');
+					var msg = "The trash can button removes the starred tag from the starred list.";
+					btn.onClick(() => new Notice(msg))
+					btn.setTooltip(msg)
+				})
+				.nameEl.setText("Starred tags get special treatment. Click buttons for more details 👉")
+		priorityTags.forEach((tag, i) => {
+			const s = new Setting(div)
+					.addToggle(toggle => {
+						toggle
+						.setValue(tag.cut_in_line)
+						.onChange(async (value) => {
+							tag.cut_in_line = value;
+							await this.plugin.saveSettings();
+						});
+						toggle.setTooltip("Show first in tag selector")
+					})
+					.addToggle(toggle => {
+						toggle
+						.setValue(tag.add_command)
+						.onChange(async (value) => {
+							tag.add_command = value;
+							await this.plugin.saveSettings();
+						});
+						toggle.setTooltip("Add command for this tag")
+					})
+					.addToggle(toggle => {
+						toggle
+						.setValue(tag.status_bar)
+						.onChange(async (value) => {
+							tag.status_bar = value;
+							await this.plugin.saveSettings();
+						});
+						toggle.setTooltip("Add button to status bar")
+					})
+					.addToggle(toggle => {
+						toggle
+						.setValue(tag.right_click)
+						.onChange(async (value) => {
+							tag.right_click = value;
+							await this.plugin.saveSettings();
+						});
+						toggle.setTooltip("Add context menu entry")
+					})
+					.addButton(button => {
+						button.onClick(async () => {
+							const oldTag = priorityTags[i-1];
+							priorityTags[i-1] = tag;
+							priorityTags[i] = oldTag;
+							this.drawPriorityTags(div);
+							await this.plugin.saveSettings();
+						})
+						button.setIcon("up-arrow-with-tail");
+						button.setTooltip("Move Starred Tag up")
+						if (i === 0){
+							button.setDisabled(true);
+						}
+					})
+					.addButton(button => {
+						button.onClick(async () => {
+							const oldTag = priorityTags[i+1];
+							priorityTags[i+1] = tag;
+							priorityTags[i] = oldTag;
+							this.drawPriorityTags(div);
+							await this.plugin.saveSettings();
+						})
+						button.setIcon("down-arrow-with-tail");
+						button.setTooltip("Move Starred Tag down")
+						if (i === priorityTags.length - 1){
+							button.setDisabled(true);
+						}
+					})
+					.addButton(btn => {
+						btn.onClick(async () => {
+							priorityTags.remove(tag)
+							await this.plugin.saveSettings();
+							this.drawPriorityTags(div)
+						})
+						btn.setIcon("trash")
+						btn.setTooltip("Remove this Tag")
+					});
+				s.nameEl.innerHTML = tag.tag_value
+		})
 	}
 }

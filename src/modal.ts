@@ -1,31 +1,36 @@
 import { App, FuzzySuggestModal, Modal, Setting, Notice, TFile, Plugin } from "obsidian";
-import {addTagToMany, getTagList, getTagsOnFiles, removeTagFromMany, getFilteredWithoutTag, getFilteredWithTag, onlyFiles} from "./utilities"
+import {addTagToMany, getTagList, getTagsOnFiles, removeTagFromMany, getFilteredWithoutTag, getFilteredWithTag, getNonStarredTags} from "./utilities"
 import QuickTagPlugin, {QuickTaggerSettings} from "./main"
 import { PassThrough } from "stream";
-export {QuickTagSelector, ConfirmModal}
+export {QuickTagSelector, ConfirmModal, JustTagSelector}
 
 
 type modeSwitcherLayout = {
     add: Function;
     remove: Function;
+    select: Function;
 }
 
 const MODE_SWITCHER: modeSwitcherLayout = {
     'add': addTagToMany,
-    'remove': removeTagFromMany
+    'remove': removeTagFromMany,
+    'select': () => {}
 }
 
 
 const TAG_GATHERER: modeSwitcherLayout = {
     'add': getTagList,
-    'remove': getTagsOnFiles
+    'remove': getTagsOnFiles,
+    'select': getNonStarredTags
 }
 
 
-const TAG_FILTER: modeSwitcherLayout = {
+const FILE_FILTER_BY_TAG: modeSwitcherLayout = {
     'add': getFilteredWithoutTag,
-    'remove': getFilteredWithTag
+    'remove': getFilteredWithTag,
+    'select': () => {}
 }
+
 
 
 class QuickTagSelector extends FuzzySuggestModal<string> {
@@ -39,6 +44,7 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
     fileFilter: Function
     showDialogs: Function
     applicableFiles: TFile[]
+    tag: string
 
     
     constructor (plugin: QuickTagPlugin, fileList: Array<TFile>, mode: string){
@@ -46,12 +52,13 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
         this.plugin = plugin
         this.func = MODE_SWITCHER[mode as keyof modeSwitcherLayout]
         this.tagArray = TAG_GATHERER[mode as keyof modeSwitcherLayout]
-        this.fileFilter = TAG_FILTER[mode as keyof modeSwitcherLayout]
+        this.fileFilter = FILE_FILTER_BY_TAG[mode as keyof modeSwitcherLayout]
         this.settings = plugin.settings
         this.fileList = fileList
         this.mode = mode
         this.applicableFiles = []
         this.confirm = true
+        this.tag = "hello"
     }
 
     getItems() {
@@ -70,6 +77,12 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
 
     // Perform action on the selected suggestion
     async onChooseItem(tag: string, evt: MouseEvent | KeyboardEvent) {
+        if (this.mode == 'select'){
+            this.tag = tag
+            this.close()
+            return
+        }
+
         this.applicableFiles = this.fileFilter(this.fileList, tag)
 
         if (this.applicableFiles.length == 0){
