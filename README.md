@@ -28,8 +28,12 @@ This plugin does not keep track of changes in an undo/redo queue, please be awar
 
 ## Roadmap
 - [x] Add a confirmation warning for removing all tags
-- [ ] Improved settings menu
-- [ ] Starred tags (improved priority tags)
+- [x] Improved settings menu
+- [x] Starred tags (improved priority tags)
+- [ ] Add command for starred tag
+- [ ] Add button for starred tag in status bar
+- [ ] Add right-click context menu option for starred tag
+- [ ] Repeat last tag command
 - [ ] Permit adding new tag from tag selector
 
 ## Manually install the plugin
