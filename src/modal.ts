@@ -2,7 +2,7 @@ import { App, FuzzySuggestModal, Modal, Setting, Notice, TFile, Plugin } from "o
 import {addTagToMany, getTagList, getTagsOnFiles, removeTagFromMany, getFilteredWithoutTag, getFilteredWithTag, getNonStarredTags} from "./utilities"
 import QuickTagPlugin, {QuickTaggerSettings} from "./main"
 import { PassThrough } from "stream";
-export {QuickTagSelector, ConfirmModal, JustTagSelector}
+export {QuickTagSelector, ConfirmModal }
 
 
 type modeSwitcherLayout = {

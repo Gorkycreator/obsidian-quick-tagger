@@ -7,9 +7,13 @@ Originally developed to improve my personal workflow, it's very handy in conjunc
 ## Features
 - No more typing in yaml headers just to add tags!
 - Independent add/remove commands to minimize flicking through menus
-- List your favorite tags in the settings, those will show up at the top of the list
 - Right click on file(s) to add tags
 - Tag all search results
+- Starred Tags (each feature is optional)
+  - Add tag to top of the list when selecting a tag
+  - Add right-click context entry
+  - Add Obsidian command to toggle the tag on the current note
+  - Add status bar button to toggle the command on the current note
 
 ## Demo
 ![demo](images/quick_tagger_demo.gif)
@@ -30,10 +34,11 @@ This plugin does not keep track of changes in an undo/redo queue, please be awar
 - [x] Add a confirmation warning for removing all tags
 - [x] Improved settings menu
 - [x] Starred tags (improved priority tags)
-- [ ] Add command for starred tag
-- [ ] Add button for starred tag in status bar
-- [ ] Add right-click context menu option for starred tag
+- [x] Add command for starred tag
+- [x] Add button for starred tag in status bar
+- [x] Add right-click context menu option for starred tag
 - [ ] Repeat last tag command
+- [ ] Tag chains (cycle through a list of tags)
 - [ ] Permit adding new tag from tag selector
 
 ## Manually install the plugin

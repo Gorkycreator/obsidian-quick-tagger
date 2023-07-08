@@ -1,9 +1,9 @@
-import{parseYaml, stringifyYaml, MarkdownView, Notice, getAllTags, App, Plugin, TFile, parseFrontMatterTags } from 'obsidian'
+import{parseYaml, stringifyYaml, MarkdownView, Notice, getAllTags, App, Plugin, TFile, parseFrontMatterTags, MenuItem, Menu } from 'obsidian'
 import QuickTagPlugin, {QuickTaggerSettings, PriorityTag} from "./main"
-import { QuickTagSelector } from './modal'
+import { QuickTagSelector, ConfirmModal } from './modal'
 import { getPriority } from 'os'
 export { getActiveFile, addTagToMany, collectExistingTags, getTagList, removeTagFromMany, getTagsOnFiles, getFilteredWithoutTag, getFilteredWithTag,
-	onlyTaggableFiles, selectTag, getNonStarredTags }
+	onlyTaggableFiles, selectTag, getNonStarredTags, dynamicToggleCommand, dynamicAddMenuItems, toggleTag }
 
 const tag_key = 'tags'
 const tag_cleanup = ['tag', 'Tag', 'Tags']
@@ -317,4 +317,108 @@ async function selectTag(plugin: QuickTagPlugin): Promise<string>{
 		}
 		modal.open()
 	})
+}
+
+
+function dynamicToggleCommand(app: App, plugin: QuickTagPlugin, priorityTag: PriorityTag){
+	var tag = priorityTag.tag_value.replace('#', '')
+	var commandId = `quick-add-tag:${tag}`
+	var fullId = `obsidian-quick-tagger:${commandId}`
+	var state = false
+
+	if(app.commands.findCommand(fullId)) {
+		delete app.commands.commands[fullId];
+		delete app.commands.editorCommands[fullId];
+	} else {
+		plugin.addCommand({
+			id: commandId,
+			name: `Toggle #${tag}`,
+			callback: () => {
+				var currentFile = getActiveFile()[0]
+				toggleTag(currentFile, tag)
+			}
+		})
+		state = true
+	}
+	return state
+}
+
+
+function dynamicAddMenuItems(menu: Menu, files: TFile[], plugin: QuickTagPlugin){
+	var starredTags = plugin.settings.priorityTags
+	starredTags.forEach((t) => {
+		if(t.right_click){
+			menu.addItem((item) =>{
+				item
+				  .setTitle(`Tag with ${t.tag_value}`)
+				  .setIcon("tag")
+				  .onClick(async () => {
+					var applicableFiles = getFilteredWithoutTag(files, t.tag_value)
+
+					if (applicableFiles.length == 0){
+						new Notice("No file tags to change!")
+						return
+					}
+
+					var confirm = await addDialogs('add', t.tag_value, applicableFiles.length)
+
+					if (confirm || applicableFiles.length == 1){
+						await addTagToMany(applicableFiles, t.tag_value.replace('#', ''), plugin).then(
+							() => confirmationNotification('add', t.tag_value, applicableFiles)
+						)
+					}
+				  })
+			})
+		}
+	})
+}
+
+
+function toggleTag(file: TFile, tag: string){
+	var tag = tag.replace('#', '')
+	var exists = filterTag(file, `#${tag}`)
+	if(!exists){
+		addTag(file, tag)
+	} else {
+		removeTag(file, tag)
+	}
+	new Notice(!exists ? `Added #${tag} to ${file.basename}` : `Removed #${tag} from ${file.basename}`)
+}
+
+
+
+async function addDialogs(mode: string, tag: string, quantity?: number){
+	var verb = mode
+	var tofrom = mode == 'add' ? " to " : " from "
+	var confirm = false
+
+	if (tag == "REMOVE ALL"){
+		var msg = "This will delete all tags on the current note(s), are you sure?"
+		await new Promise((resolve) => {  // add a promise to wait for confirmation
+			new ConfirmModal(app, (result) => (resolve(confirm = result)), msg).open()
+		})
+		verb = ""
+	}
+	if (quantity && quantity > 1){
+		var msg = "You are about to " + 
+					verb + " " +
+					tag +
+					tofrom +
+					quantity + " notes, are you sure?"
+		await new Promise((resolve) => {  // add a promise to wait for confirmation
+			new ConfirmModal(app, (result) => (resolve(confirm = result)), msg).open()
+		})
+	}
+	return confirm
+}
+
+
+function confirmationNotification(mode:string, tag:string, applicableFiles: TFile[]){
+	var notes = applicableFiles.length > 1 ? applicableFiles.length + " notes" : applicableFiles[0].basename
+	var tofrom = mode == 'add' ? " added to " : " removed from "
+	if (tag == "REMOVE ALL"){
+		new Notice("All tags removed from " + notes)
+	} else {
+		new Notice(tag + tofrom + notes)
+	}
 }

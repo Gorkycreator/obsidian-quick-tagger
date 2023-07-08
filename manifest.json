@@ -1,9 +1,9 @@
 {
 	"id": "obsidian-quick-tagger",
 	"name": "Quick Tagger",
-	"version": "1.2.0",
+	"version": "2.1.0",
 	"minAppVersion": "1.16.0",
-	"description": "This is a plugin to add a modal to quickly tag notes based on preset tags.",
+	"description": "This is a plugin to facilitate quickly tagging notes. It has a dedicated tag selector and bulk-tagging options.",
 	"author": "Gorkycreator",
 	"authorUrl": "https://www.warneranimation.com",
 	"fundingUrl": "",
