@@ -26,7 +26,7 @@ Note that this demo was recorded on mobile with buttons added to the title bar v
 Starred tags have the following features, each independently configurable:
   - Add tag to top of the list when selecting a tag
   - Add right-click context entry
-  - Add Obsidian command to toggle the tag on the current note
+  - Add Obsidian command to toggle the tag on the current note (use this to make hotkeys!)
   - Add status bar button to toggle the command on the current note
 
 ![starred-tag-demo](images/starred-tag-demo.gif)
