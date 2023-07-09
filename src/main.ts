@@ -1,26 +1,41 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, TFile, PluginSettingTab, Setting, SliderComponent, SearchResult, sortSearchResults, TextComponent } from 'obsidian';
-import { QuickTagSelector, ConfirmModal } from './modal'
-import { getActiveFile, collectExistingTags, onlyTaggableFiles, selectTag, dynamicToggleCommand, dynamicAddMenuItems, toggleTag } from './utilities';
+import { App, Notice, Plugin, TFile, PluginSettingTab, Setting } from 'obsidian';
+import { dynamicToggleCommand, dynamicAddMenuItems, addTagsWithModal, addTagWithModal,
+	toggleTagOnActive, selectTag, removeTagWithModal, removeTagsWithModal } from './utilities';
+import { getNonStarredTags } from './tag_gatherers';
+import { onlyTaggableFiles } from './file_filters';
 
 
-export interface PriorityTag {
-	tag_value: string
-	cut_in_line: boolean
-	status_bar: boolean
-	add_command: boolean
-	right_click: boolean
+/** interface for starred tag settings
+ * 
+ */
+export interface StarredTag {
+	tag_value: string;
+	cut_in_line: boolean;
+	status_bar: boolean;
+	add_command: boolean;
+	right_click: boolean;
 }
 
+/** interface for plugin settings as a whole
+ * 
+ */
 export interface QuickTaggerSettings {
 	all_tags: boolean;
-	priorityTags: PriorityTag[]
+	priorityTags: StarredTag[];
 }
 
+/** default settings for when none exist
+ * 
+ */
 const DEFAULT_SETTINGS: QuickTaggerSettings = {
 	all_tags: true,
-	priorityTags: [{tag_value:"test", cut_in_line:false, status_bar:false, add_command:false, right_click:false}]
+	priorityTags: []
 }
 
+
+/** Main class for plugin
+ * 
+ */
 export default class QuickTagPlugin extends Plugin {
 	settings: QuickTaggerSettings;
 	_statusBarItem: HTMLElement[]
@@ -28,7 +43,7 @@ export default class QuickTagPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		
-		// Add Dynamic commands
+		// Add Dynamic commands/status bar buttons
 		var starredTags = this.settings.priorityTags
 		starredTags.forEach((t) => {
 			if(t.add_command){
@@ -40,14 +55,12 @@ export default class QuickTagPlugin extends Plugin {
 		this.redrawButtons()
 
 		// Ribbon Icons
-		const addTagRibbonIcon = this.addRibbonIcon('tag', 'Add Tag to Current Note', (evt: MouseEvent) => {
-			var currentFile = getActiveFile()
-			new QuickTagSelector(this, currentFile, 'add').open();
+		const addTagRibbonIcon = this.addRibbonIcon('tag', 'Add Tag to Current Note', async (evt: MouseEvent) => {
+			addTagWithModal(this)
 		});
 
 		const removeTagRibbonIcon = this.addRibbonIcon('x-square', 'Remove Tag from Current Note', (evt: MouseEvent) => {
-			var currentFile = getActiveFile()
-			new QuickTagSelector(this, currentFile, 'remove').open();
+			removeTagWithModal(this)
 		});
 
 
@@ -56,8 +69,7 @@ export default class QuickTagPlugin extends Plugin {
 			id: 'quick-add-tag',
 			name: 'Add Tag',
 			callback: () => {
-				var currentFile = getActiveFile()
-				new QuickTagSelector(this, currentFile, 'add').open()
+				addTagWithModal(this)
 			}
 		});
 
@@ -65,25 +77,9 @@ export default class QuickTagPlugin extends Plugin {
 			id: 'open-quick-tagger',
 			name: 'Remove Tag',
 			callback: () => {
-				var currentFile = getActiveFile()
-				new QuickTagSelector(this, currentFile, 'remove').open()
+				removeTagWithModal(this)
 			}
 		});
-
-		this.addCommand({
-			id: 'test-quick-tagger',
-			name: 'debug test',
-			callback: () => {
-				console.log("DEBUG TEST!!!!")
-
-				var myFile = getActiveFile()[0]
-				if(myFile){
-					this.app.fileManager.processFrontMatter(myFile, (frontmatter: object) => {
-						frontmatter = collectExistingTags(frontmatter)
-					})
-				}
-			}
-		})
 
 		// File Context menu commands
 		this.registerEvent(
@@ -95,7 +91,7 @@ export default class QuickTagPlugin extends Plugin {
 					  .setTitle("Tag " + files.length + " files with...")
 					  .setIcon("tag")
 					  .onClick(() => {
-						new QuickTagSelector(this, files, 'add').open()
+						addTagsWithModal(this, files)
 					  })
 				})
 			})
@@ -117,7 +113,7 @@ export default class QuickTagPlugin extends Plugin {
 					  .setTitle("Remove Tag from " + files.length + " files...")
 					  .setIcon("tag")
 					  .onClick(() => {
-						new QuickTagSelector(this, files, 'remove').open()
+						removeTagsWithModal(this, files)
 					  })
 				})
 			})
@@ -126,15 +122,13 @@ export default class QuickTagPlugin extends Plugin {
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
 				var thisFile = onlyTaggableFiles([file])
-				if(thisFile.length < 1){return} else {file = thisFile[0]}
+				if(thisFile.length < 1){return}
 				menu.addItem((item) =>{
 					item
 					  .setTitle("Tag file with...")
 					  .setIcon("tag")
 					  .onClick(() => {
-						var filteredFile = onlyTaggableFiles([file])
-						if(filteredFile.length < 1){return}
-						new QuickTagSelector(this, filteredFile, 'add').open()
+						addTagsWithModal(this, thisFile)
 					  })
 				})
 			})
@@ -142,23 +136,22 @@ export default class QuickTagPlugin extends Plugin {
 
 		this.registerEvent(
 			this.app.workspace.on('file-menu', (menu, file) => {
-				if(file.length < 1){return}
-				dynamicAddMenuItems(menu, [file], this)
+				var thisFile = onlyTaggableFiles([file])
+				if(thisFile.length < 1){return}
+				dynamicAddMenuItems(menu, thisFile, this)
 			})
 		)
 
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
 				var thisFile = onlyTaggableFiles([file])
-				if(thisFile.length < 1){return} else {file = thisFile[0]}
+				if(thisFile.length < 1){return}
 				menu.addItem((item) =>{
 					item
 					  .setTitle("Remove Tag(s)...")
 					  .setIcon("tag")
 					  .onClick(() => {
-						var filteredFile = onlyTaggableFiles([file])
-						if(filteredFile.length < 1){return}
-						new QuickTagSelector(this, filteredFile, 'remove').open()
+						removeTagsWithModal(this, thisFile)
 					  })
 				})
 			})
@@ -177,7 +170,7 @@ export default class QuickTagPlugin extends Plugin {
 					  .setTitle("Add Tags to " + files.length + " notes...")
 					  .setIcon("tag")
 					  .onClick(() => {
-						new QuickTagSelector(this, files, 'add').open()
+						addTagsWithModal(this, files)
 					  })
 				})
 			})
@@ -206,7 +199,7 @@ export default class QuickTagPlugin extends Plugin {
 					  .setTitle("Remove Tags from " + files.length + " notes...")
 					  .setIcon("tag")
 					  .onClick(() => {						
-						new QuickTagSelector(this, files, 'remove').open()
+						removeTagsWithModal(this, files)
 					  })
 				})
 			})
@@ -252,8 +245,7 @@ export default class QuickTagPlugin extends Plugin {
 				item_to_add.setAttribute("aria-label", `Toggle #${t.tag_value} on active note`);
 				item_to_add.setAttribute("aria-label-position", "top");
 				item_to_add.addEventListener("click", async () => {
-					var currentFile = getActiveFile()
-					toggleTag(currentFile[0], t.tag_value)
+					toggleTagOnActive(t.tag_value)
 				});
 			}
 		}
@@ -262,6 +254,9 @@ export default class QuickTagPlugin extends Plugin {
 }
 
 
+/** Class for settings tab. Draws and sets up settings
+ * 
+ */
 class QuickTagSettingTab extends PluginSettingTab {
 	plugin: QuickTagPlugin;
 
@@ -298,7 +293,7 @@ class QuickTagSettingTab extends PluginSettingTab {
 		    .addButton(btn => btn
 			    .setTooltip("Add a starred tag")
 				.onClick(async () => {
-					let thisTag = await selectTag(this.plugin)
+					let thisTag = await selectTag(this.plugin, getNonStarredTags)
 					
 					console.log("SETTING FUNCTION")
 					// console.log(selectedTag)

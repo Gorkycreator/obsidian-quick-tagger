@@ -1,73 +1,33 @@
-import { App, FuzzySuggestModal, Modal, Setting, Notice, TFile, Plugin } from "obsidian";
-import {addTagToMany, getTagList, getTagsOnFiles, removeTagFromMany, getFilteredWithoutTag, getFilteredWithTag, getNonStarredTags} from "./utilities"
+import { App, FuzzySuggestModal, Modal, Setting, Notice, TFile } from "obsidian";
 import QuickTagPlugin, {QuickTaggerSettings} from "./main"
-import { PassThrough } from "stream";
-export {QuickTagSelector, ConfirmModal }
+export { ConfirmModal, QuickTagSelector }
 
 
-type modeSwitcherLayout = {
-    add: Function;
-    remove: Function;
-    select: Function;
-}
-
-const MODE_SWITCHER: modeSwitcherLayout = {
-    'add': addTagToMany,
-    'remove': removeTagFromMany,
-    'select': () => {}
-}
-
-
-const TAG_GATHERER: modeSwitcherLayout = {
-    'add': getTagList,
-    'remove': getTagsOnFiles,
-    'select': getNonStarredTags
-}
-
-
-const FILE_FILTER_BY_TAG: modeSwitcherLayout = {
-    'add': getFilteredWithoutTag,
-    'remove': getFilteredWithTag,
-    'select': () => {}
-}
-
-
-
+/** This modal class handles selecting a tag and should pass a tag back to the main function.
+ * 
+ */
 class QuickTagSelector extends FuzzySuggestModal<string> {
-    plugin: Plugin
-    mode: string
-    func: Function
-    tagArray: Function
-    confirm: boolean
+    gatherer: Function
     settings: QuickTaggerSettings
     fileList: TFile[]
-    fileFilter: Function
-    showDialogs: Function
-    applicableFiles: TFile[]
     tag: string
 
     
-    constructor (plugin: QuickTagPlugin, fileList: Array<TFile>, mode: string){
+    constructor (plugin: QuickTagPlugin, gatherer: Function, fileList: Array<TFile>){
         super(plugin.app)
-        this.plugin = plugin
-        this.func = MODE_SWITCHER[mode as keyof modeSwitcherLayout]
-        this.tagArray = TAG_GATHERER[mode as keyof modeSwitcherLayout]
-        this.fileFilter = FILE_FILTER_BY_TAG[mode as keyof modeSwitcherLayout]
+        this.gatherer = gatherer
         this.settings = plugin.settings
         this.fileList = fileList
-        this.mode = mode
-        this.applicableFiles = []
-        this.confirm = true
-        this.tag = "hello"
+        this.tag = ''
     }
 
-    getItems() {
-        if(!this.tagArray){
+    getItems(): string[] {
+        if(!this.gatherer){
             new Notice("Error: Could not find tags!")
             return []
         } 
 
-        var results = this.tagArray(app, this.settings, this.fileList)
+        var results = this.gatherer(this.settings, this.fileList)
         return results
     }
 
@@ -75,64 +35,9 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
         return tag
     }
 
-    // Perform action on the selected suggestion
-    async onChooseItem(tag: string, evt: MouseEvent | KeyboardEvent) {
-        if (this.mode == 'select'){
-            this.tag = tag
-            this.close()
-            return
-        }
-
-        this.applicableFiles = this.fileFilter(this.fileList, tag)
-
-        if (this.applicableFiles.length == 0){
-            new Notice("No file tags to change!")
-            return
-        }
-
-        await this.addDialogs(tag)
-
-        if (this.confirm && this.func){
-            await this.func(this.applicableFiles, tag.replace('#', ''), this.plugin).then(
-                () => this.confirmationNotification(tag)
-            )
-        }
-    }
-
-
-    async addDialogs(tag:string) {
-        var verb = this.mode
-        var tofrom = this.mode == 'add' ? " to " : " from "
-        var quantity = this.applicableFiles.length
-
-        if (tag == "REMOVE ALL"){
-            var msg = "This will delete all tags on the current note(s), are you sure?"
-            await new Promise((resolve) => {  // add a promise to wait for confirmation
-                new ConfirmModal(app, (result) => (resolve(this.confirm = result)), msg).open()
-            })
-            verb = ""
-        }
-        if (quantity > 1){
-            var msg = "You are about to " + 
-                      verb + " " +
-                      tag +
-                      tofrom +
-                      quantity + " notes, are you sure?"
-            await new Promise((resolve) => {  // add a promise to wait for confirmation
-                new ConfirmModal(app, (result) => (resolve(this.confirm = result)), msg).open()
-            })
-        }
-        return this.confirm
-    }
-
-    confirmationNotification(tag:string){
-        var notes = this.applicableFiles.length > 1 ? this.applicableFiles.length + " notes" : this.applicableFiles[0].basename
-        var tofrom = this.mode == 'add' ? " added to " : " removed from "
-        if (tag == "REMOVE ALL"){
-            new Notice("All tags removed from " + notes)
-        } else {
-            new Notice(tag + tofrom + notes)
-        }
+    // this should be overwritten when called to hook into a promise's resolve
+    async onChooseItem(tag: string) {
+        this.tag = tag
     }
 }
 
