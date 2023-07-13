@@ -2,7 +2,7 @@
 	"id": "obsidian-quick-tagger",
 	"name": "Quick Tagger",
 	"version": "2.1.0",
-	"minAppVersion": "1.16.0",
+	"minAppVersion": "1.3.6",
 	"description": "This is a plugin to facilitate quickly tagging notes. It has a dedicated tag selector and bulk-tagging options.",
 	"author": "Gorkycreator",
 	"authorUrl": "https://www.warneranimation.com",
