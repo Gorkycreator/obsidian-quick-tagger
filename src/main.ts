@@ -161,7 +161,7 @@ export default class QuickTagPlugin extends Plugin {
 		this.registerEvent(
 			this.app.workspace.on("search:results-menu", (menu, leaf) => {
 				var files = [] as TFile[]
-				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this
+				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this!
 				files = onlyTaggableFiles(files)
 				if(files.length < 1){return}
 
@@ -179,7 +179,7 @@ export default class QuickTagPlugin extends Plugin {
 		this.registerEvent(
 			this.app.workspace.on("search:results-menu", (menu, leaf) => {
 				var files = [] as TFile[]
-				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this
+				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this, too
 				files = onlyTaggableFiles(files)
 				if(files.length < 1){return}
 
@@ -190,7 +190,7 @@ export default class QuickTagPlugin extends Plugin {
 		this.registerEvent(
 			this.app.workspace.on("search:results-menu", (menu, leaf) => {
 				var files = [] as TFile[]
-				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this
+				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this, really.
 				files = onlyTaggableFiles(files)
 				if(files.length < 1){return}
 				
@@ -271,10 +271,12 @@ class QuickTagSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Quick Tagger Settings'});
+		// Style guide says not to use a main heading
+		// https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines#Only%20use%20headings%20under%20settings%20if%20you%20have%20more%20than%20one%20section.
+		// containerEl.createEl('h2', {text: 'Quick Tagger Settings'});
 
 		new Setting(containerEl)
-			.setName('Use All Tags')
+			.setName('Use all tags')
 			.setDesc('If disabled, only Starred Tags will be shown in the tag selection dialog.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.all_tags)
@@ -283,7 +285,7 @@ class QuickTagSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 			}));
 
-		containerEl.createEl('h1', { text: 'Starred Tags' });
+		containerEl.createEl('h1', { text: 'Starred tags' });
 		containerEl.createEl('h2', "hello")
 
 		const starredDiv = containerEl.createDiv();

@@ -32,9 +32,11 @@ function _getActiveFile() {
  * @param tag the tag to add
  */
 async function _addTag(thisFile: TFile, tag: string){
+	tag = _formatHashTag(tag)
 	await _cleanFile(thisFile)
 	await this.app.fileManager.processFrontMatter(thisFile, (frontmatter: object) => {
 		frontmatter = _collectExistingTags(frontmatter);
+		frontmatter[tag_key] = frontmatter[tag_key].map((t) => _formatHashTag(t))
 		frontmatter[tag_key].push(tag)
 	})
 }
@@ -45,16 +47,20 @@ async function _addTag(thisFile: TFile, tag: string){
  * @param tag the tag to remove
  */
 async function _removeTag(thisFile: TFile, tag:string){
+	tag = tag != "REMOVE ALL" ? _formatHashTag(tag) : tag
 	await _cleanFile(thisFile)
 	var processor = (frontmatter: object) => {
 		frontmatter = _collectExistingTags(frontmatter)
 		var tags = frontmatter[tag_key]
+		tags = tags.map((t:string) => _formatHashTag(t))
 		var indx = tags.indexOf(tag, 0)
 		if (indx > -1){
 			tags.splice(indx, 1)
 		}
+		frontmatter[tag_key] = tags
 	}
 	if (tag == "REMOVE ALL"){
+		console.log("removing all tags.....")
 		processor = (frontmatter: object) => {
 			frontmatter[tag_key] = []
 		}
@@ -174,6 +180,19 @@ async function _cleanFile(f:TFile){
 	}
 }
 
+/** Unify tag formatting
+ * 
+ * @param tag string representing the name of a tag, with or without a # symbol
+ * @returns tag with one # symbol at the front
+ */
+function _formatHashTag(tag:string){
+	if (tag[0] != "#"){
+		return `#${tag}`
+	} else {
+		return tag
+	}
+}
+
 
 /** Collect all recognized tag list variations into one key
  * 
@@ -182,7 +201,7 @@ async function _cleanFile(f:TFile){
  */
 function _collectExistingTags(yml:any){
 	// make the desired key, if it does not exist
-	if (!yml.hasOwnProperty(tag_key)){
+	if (!yml.hasOwnProperty(tag_key) || yml[tag_key] === null){
 		yml[tag_key] = []
 	} else {
 		// catch existing string formatting that works in obsidian, but not javascript
@@ -200,6 +219,10 @@ function _collectExistingTags(yml:any){
 		});
 
 		delete yml[alternate_keys[i]]  // remove the undesired keys
+	}
+
+	for(var i=0;i<yml[tag_key].length;i++){
+		yml[tag_key][i] = _formatHashTag(yml[tag_key][i])
 	}
 
 	return yml
