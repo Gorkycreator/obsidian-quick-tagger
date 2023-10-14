@@ -98,7 +98,7 @@ function getStarredTags(settings: QuickTaggerSettings, filter_key?:string){
  */
 function getTagsFromAppCache(){
 	var results = [] as string[]
-	for (const key in app.metadataCache.getTags()){
+	for (const key in this.app.metadataCache.getTags()){
 		results.push(key)
 	}
 	return results

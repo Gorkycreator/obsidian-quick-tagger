@@ -5,6 +5,8 @@ import { getTagList, getTagsOnFiles } from './tag_gatherers'
 import { filterTag, getFilteredWithTag, getFilteredWithoutTag } from './file_filters'
 export { selectTag, addTagsWithModal, addTagWithModal, removeTagWithModal, removeTagsWithModal,
 	toggleTagOnActive, dynamicToggleCommand, dynamicAddMenuItems }
+export { _formatHashTag, _addFrontMatterTag, _cleanNoteContent, _getRemovalProcessor, 
+	_removeAllFrontMatterTags, _removeFrontMatterTag }
 
 const tag_key = 'tags'
 const tag_cleanup = ['tag', 'Tag', 'Tags']
@@ -32,13 +34,20 @@ function _getActiveFile() {
  * @param tag the tag to add
  */
 async function _addTag(thisFile: TFile, tag: string){
-	tag = _formatHashTag(tag)
+	this.tag = _formatHashTag(tag)
 	await _cleanFile(thisFile)
-	await this.app.fileManager.processFrontMatter(thisFile, (frontmatter: object) => {
-		frontmatter = _collectExistingTags(frontmatter);
-		frontmatter[tag_key] = frontmatter[tag_key].map((t) => _formatHashTag(t))
-		frontmatter[tag_key].push(tag)
-	})
+	await this.app.fileManager.processFrontMatter(thisFile, _addFrontMatterTag.bind(this))
+}
+
+
+/** Add tag to a note; extracted from Obsidian functionality
+ * 
+ * @param frontmatter an object with a tags key
+ */
+function _addFrontMatterTag(frontmatter: {tags: string[]}){
+	frontmatter = _collectExistingTags(frontmatter);
+	frontmatter[tag_key] = frontmatter[tag_key].map((t:string) => _formatHashTag(t))
+	frontmatter[tag_key].push(this.tag)
 }
 
 
@@ -47,26 +56,50 @@ async function _addTag(thisFile: TFile, tag: string){
  * @param tag the tag to remove
  */
 async function _removeTag(thisFile: TFile, tag:string){
-	tag = tag != "REMOVE ALL" ? _formatHashTag(tag) : tag
+	this.tag = _formatHashTag(tag)
 	await _cleanFile(thisFile)
-	var processor = (frontmatter: object) => {
-		frontmatter = _collectExistingTags(frontmatter)
-		var tags = frontmatter[tag_key]
-		tags = tags.map((t:string) => _formatHashTag(t))
-		var indx = tags.indexOf(tag, 0)
-		if (indx > -1){
-			tags.splice(indx, 1)
-		}
-		frontmatter[tag_key] = tags
-	}
-	if (tag == "REMOVE ALL"){
-		console.log("removing all tags.....")
-		processor = (frontmatter: object) => {
-			frontmatter[tag_key] = []
-		}
-	}
-	await this.app.fileManager.processFrontMatter(thisFile, processor)
+	let processor = _getRemovalProcessor(tag)
+	await this.app.fileManager.processFrontMatter(thisFile, processor.bind(this))
 }
+
+/** Select the function to be used with tag removal
+ * 
+ * @param tag 
+ * @returns 
+ */
+function _getRemovalProcessor(tag: string){
+	if (tag != "REMOVE ALL"){
+		return _removeFrontMatterTag
+	} else {
+		console.log("removing all tags.....")
+		return _removeAllFrontMatterTags
+	}
+}
+
+
+/** Remove a single tag from a note; separated from Obsidian logic
+ * 
+ * @param frontmatter 
+ */
+function _removeFrontMatterTag(frontmatter: {tags: string[]}) {
+	frontmatter = _collectExistingTags(frontmatter)
+	var tags = frontmatter[tag_key]
+	tags = tags.map((t:string) => _formatHashTag(t))
+	var indx = tags.indexOf(this.tag, 0)
+	if (indx > -1){
+		tags.splice(indx, 1)
+	}
+	frontmatter[tag_key] = tags
+}
+
+
+/** Remove all tags from a note; separated from Obsidian logic
+ * 
+ */
+function _removeAllFrontMatterTags(frontmatter: {tags: string[]}) {
+	frontmatter[tag_key] = []
+}
+
 
 /** Add or remove the given tag on the given files
  * 
@@ -75,7 +108,7 @@ async function _removeTag(thisFile: TFile, tag:string){
  * @returns number added, number removed 
  */
 function _toggleTags(files: TFile[], tag: string): number[] {
-	var tag = tag.replace('#', '')
+	var tag = _formatHashTag(tag)
 	var tag_added = 0
 	var tag_removed = 0
 
@@ -154,29 +187,44 @@ async function _apply_bulk_changes(files:TFile[], tag:string, plugin:QuickTagPlu
  */
 async function _cleanFile(f:TFile){
 	let text = await this.app.vault.read(f)
-	var modified = false
 
-	// first check newlines
-	if(text[0] == '\n'){
-		while(text[0] == '\n'){
-			text = text.slice(1)
-		}
-		modified = true
-	}
-
-	// then check to make sure we have our yaml guiderails
-	if(text.indexOf("---\n") == 0){
-		var matches = text.match(/---\s*\n?/g)
-		if(matches[1] != "---\n" && matches[1] != "---"){  // if our second match isn't clean, fix it!
-			text = text.replace(matches[1], "---\n")
-			modified = true
-		}
-	}
+	let modified = _cleanNoteContent(text)
 
 	// if anything was changed, write it back to the file
 	if(modified){
 		console.log(`fixing up broken parts of ${f.basename}'s yaml...`)
 		await this.app.vault.modify(f, text)
+	}
+}
+
+/** Fix problems with processFrontMatter (extracted to separate plugin process from Obsidian code)
+ * 
+ * @param content "string representing the note's content"
+ */
+function _cleanNoteContent(content:string){
+	let modified = false
+
+	// first check newlines
+	if(content[0] == '\n'){
+		while(content[0] == '\n'){
+			content = content.slice(1)
+		}
+		modified = true
+	}
+
+	// then check to make sure we have our yaml guiderails
+	if(content.indexOf("---\n") == 0){
+		var matches = content.match(/---\s*\n?/g)
+		if(matches && matches[1] != "---\n" && matches[1] != "---"){  // if our second match isn't clean, fix it!
+			content = content.replace(matches[1], "---\n")
+			modified = true
+		}
+	}
+
+	if(modified){
+		return content
+	} else {
+		return false
 	}
 }
 
@@ -186,11 +234,7 @@ async function _cleanFile(f:TFile){
  * @returns tag with one # symbol at the front
  */
 function _formatHashTag(tag:string){
-	if (tag[0] != "#"){
-		return `#${tag}`
-	} else {
-		return tag
-	}
+		return tag.replace('#', '')
 }
 
 
@@ -258,7 +302,7 @@ async function selectTag(plugin: QuickTagPlugin, gatherer: Function, notes?: TFi
 		const modal = new QuickTagSelector(plugin, gatherer, notes ? notes : []);
 
 		// overwrite onChooseItem method so we can insert the resolve
-		modal.onChooseItem = (tag: string) => {
+		modal.onChooseItem = async (tag: string) => {
 			resolve(tag)
 		}
 		modal.open()
