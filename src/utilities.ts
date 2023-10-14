@@ -18,7 +18,7 @@ const WOAH_LOTS_OF_FILES = 100
  * @returns Tfile array
  */
 function _getActiveFile() {
-	var thisFile = this.app.workspace.getActiveFile()
+	let thisFile = this.app.workspace.getActiveFile()
 	if(thisFile instanceof TFile) {
 		return [thisFile]
 	} else {
@@ -83,9 +83,9 @@ function _getRemovalProcessor(tag: string){
  */
 function _removeFrontMatterTag(frontmatter: {tags: string[]}) {
 	frontmatter = _collectExistingTags(frontmatter)
-	var tags = frontmatter[tag_key]
+	let tags = frontmatter[tag_key]
 	tags = tags.map((t:string) => _formatHashTag(t))
-	var indx = tags.indexOf(this.tag, 0)
+	let indx = tags.indexOf(this.tag, 0)
 	if (indx > -1){
 		tags.splice(indx, 1)
 	}
@@ -107,13 +107,13 @@ function _removeAllFrontMatterTags(frontmatter: {tags: string[]}) {
  * @param tag 
  * @returns number added, number removed 
  */
-function _toggleTags(files: TFile[], tag: string): number[] {
-	var tag = _formatHashTag(tag)
-	var tag_added = 0
-	var tag_removed = 0
+function _toggleTags(files: TFile[], input_tag: string): number[] {
+	let tag = _formatHashTag(input_tag)
+	let tag_added = 0
+	let tag_removed = 0
 
-	for(var i=0; i<files.length; i++){
-		var exists = filterTag(files[i], `#${tag}`)
+	for(let i=0; i<files.length; i++){
+		let exists = filterTag(files[i], `#${tag}`)
 		if(!exists){
 			_addTag(files[i], tag)
 			tag_added++
@@ -160,15 +160,15 @@ async function _removeTagFromMany(files:TFile[], tag:string, plugin: QuickTagPlu
  * @param func 
  */
 async function _apply_bulk_changes(files:TFile[], tag:string, plugin:QuickTagPlugin, func:Function){
-	var logger = plugin.addStatusBarItem();
+	let logger = plugin.addStatusBarItem();
 	logger.createEl("span")
-	var useStatusBar = false
+	let useStatusBar = false
 
 	if (files.length > WOAH_LOTS_OF_FILES){
 		new Notice("Processing " + files.length + " files... This might take a while. See status bar for progress.")
 		useStatusBar = true
 	}
-	for (var i=0; i<files.length; i++){
+	for (let i=0; i<files.length; i++){
 		if(useStatusBar){
 			logger.setText(`Processing ${tag}: ${i + 1}/${files.length}`)
 		}
@@ -214,7 +214,7 @@ function _cleanNoteContent(content:string){
 
 	// then check to make sure we have our yaml guiderails
 	if(content.indexOf("---\n") == 0){
-		var matches = content.match(/---\s*\n?/g)
+		let matches = content.match(/---\s*\n?/g)
 		if(matches && matches[1] != "---\n" && matches[1] != "---"){  // if our second match isn't clean, fix it!
 			content = content.replace(matches[1], "---\n")
 			modified = true
@@ -238,7 +238,7 @@ function _formatHashTag(tag:string){
 }
 
 
-/** Collect all recognized tag list variations into one key
+/** Collect all recognized tag list letiations into one key
  * 
  * @param yaml - a single yaml dict 
  * @returns - a single modified yaml dict
@@ -253,10 +253,10 @@ function _collectExistingTags(yml:any){
 	}
 
 	// get a list of any keys the yaml includes that we don't want
-	var alternate_keys = tag_cleanup.filter(v => Object.keys(yml).includes(v))
+	let alternate_keys = tag_cleanup.filter(v => Object.keys(yml).includes(v))
 	
-	for(var i=0;i<alternate_keys.length;i++){
-		var otherTags = _conformToArray(yml[alternate_keys[i]])
+	for(let i=0;i<alternate_keys.length;i++){
+		let otherTags = _conformToArray(yml[alternate_keys[i]])
 		otherTags.forEach((tag: string) => {
 			// dump non-duplicate tags from other keys into the desired key
 			!yml[tag_key].includes(tag) ? yml[tag_key].push(tag) : console.log(tag + " already exists") 
@@ -265,7 +265,7 @@ function _collectExistingTags(yml:any){
 		delete yml[alternate_keys[i]]  // remove the undesired keys
 	}
 
-	for(var i=0;i<yml[tag_key].length;i++){
+	for(let i=0;i<yml[tag_key].length;i++){
 		yml[tag_key][i] = _formatHashTag(yml[tag_key][i])
 	}
 
@@ -281,7 +281,7 @@ function _collectExistingTags(yml:any){
  * @returns - the conformed array
  */
 function _conformToArray(input:string | Array<string>){
-	var output = typeof(input) === 'string' ? input.split(',').map(e => e.trim()) : input
+	let output = typeof(input) === 'string' ? input.split(',').map(e => e.trim()) : input
     if (output.length == 1){
 		// if we have one string, split it by spaces to confirm we don't have multiple tags
 		output = output[0].split(' ').map(e => e.trim())
@@ -298,8 +298,9 @@ function _conformToArray(input:string | Array<string>){
  * @returns promise for a tag (string) selected from the modal
  */
 async function selectTag(plugin: QuickTagPlugin, gatherer: Function, notes?: TFile[]): Promise<string>{
+	// TODO: replace promise with an async function
 	return new Promise((resolve) => {
-		const modal = new QuickTagSelector(plugin, gatherer, notes ? notes : []);
+		const modal = new QuickTagSelector(plugin, gatherer, notes ? notes : [], (result) => {tag = result});
 
 		// overwrite onChooseItem method so we can insert the resolve
 		modal.onChooseItem = async (tag: string) => {
@@ -307,6 +308,12 @@ async function selectTag(plugin: QuickTagPlugin, gatherer: Function, notes?: TFi
 		}
 		modal.open()
 	})
+}
+
+async function launch_tag_selector(plugin, gatherer, notes){
+	let tag = null
+	new ConfirmModal(this.app, (result) => (tag = result), msg).open()
+	return tag
 }
 
 
@@ -317,8 +324,8 @@ async function selectTag(plugin: QuickTagPlugin, gatherer: Function, notes?: TFi
  * @param applicableFiles 
  */
 function confirmationNotification(mode:string, tag:string, applicableFiles: TFile[]){
-	var notes = applicableFiles.length > 1 ? applicableFiles.length + " notes" : applicableFiles[0].basename
-	var tofrom = mode == 'add' ? " added to " : " removed from "
+	let notes = applicableFiles.length > 1 ? applicableFiles.length + " notes" : applicableFiles[0].basename
+	let tofrom = mode == 'add' ? " added to " : " removed from "
 	if (tag == "REMOVE ALL"){
 		new Notice("All tags removed from " + notes)
 	} else {
@@ -334,15 +341,15 @@ function confirmationNotification(mode:string, tag:string, applicableFiles: TFil
  * @param StarredTag 
  * @returns 
  */
-function dynamicToggleCommand(app: App, plugin: QuickTagPlugin, StarredTag: StarredTag){
-	var tag = StarredTag.tag_value.replace('#', '')
-	var commandId = `quick-add-tag:${tag}`
-	var fullId = `obsidian-quick-tagger:${commandId}`
-	var state = false
+function dynamicToggleCommand(thisApp: App, plugin: QuickTagPlugin, StarredTag: StarredTag){
+	let tag = StarredTag.tag_value.replace('#', '')
+	let commandId = `quick-add-tag:${tag}`
+	let fullId = `obsidian-quick-tagger:${commandId}`
+	let state = false
 
-	if(app.commands.findCommand(fullId)) {
-		delete app.commands.commands[fullId];
-		delete app.commands.editorCommands[fullId];
+	if(thisApp.commands.findCommand(fullId)) {
+		delete thisApp.commands.commands[fullId];
+		delete thisApp.commands.editorCommands[fullId];
 	} else {
 		plugin.addCommand({
 			id: commandId,
@@ -363,7 +370,7 @@ function dynamicToggleCommand(app: App, plugin: QuickTagPlugin, StarredTag: Star
  * @param plugin 
  */
 function dynamicAddMenuItems(menu: Menu, files: TFile[], plugin: QuickTagPlugin){
-	var starredTags = plugin.settings.priorityTags
+	let starredTags = plugin.settings.priorityTags
 	starredTags.forEach((t) => {
 		if(t.right_click){
 			menu.addItem((item) =>{
@@ -387,30 +394,34 @@ function dynamicAddMenuItems(menu: Menu, files: TFile[], plugin: QuickTagPlugin)
  * @returns 
  */
 async function addDialogs(mode: string, tag: string, quantity?: number){
-	var verb = mode
-	var tofrom = mode == 'add' ? " to " : " from "
-	var confirm = true
+	let verb = mode
+	let tofrom = mode == 'add' ? " to " : " from "
+	let confirm = true
 
 	if (tag == "REMOVE ALL"){
-		var msg = "This will delete all tags on the current note(s), are you sure?"
-		await new Promise((resolve) => {  // add a promise to wait for confirmation
-			new ConfirmModal(app, (result) => (resolve(confirm = result)), msg).open()
-		})
+		let msg = "This will delete all tags on the active note, are you sure?"
+		await adjust_tag_dialog(msg)
 		verb = ""
 	}
 	if (!confirm) {return confirm}
 	if (quantity && quantity > 1){
-		var msg = "You are about to " + 
+		let msg = "You are about to " + 
 					verb + " " +
 					tag +
 					tofrom +
 					quantity + " notes, are you sure?"
-		await new Promise((resolve) => {  // add a promise to wait for confirmation
-			new ConfirmModal(app, (result) => (resolve(confirm = result)), msg).open()
-		})
+		await adjust_tag_dialog(msg)
 	}
 	return confirm
 }
+
+
+async function adjust_tag_dialog(msg: string){
+	let confirm = null
+	new ConfirmModal(this.app, (result) => (confirm = result), msg).open()
+	return confirm
+}
+
 
 
 //// --------------- DIRECT COMMAND CALLS ----------------- /////
@@ -421,7 +432,7 @@ async function addDialogs(mode: string, tag: string, quantity?: number){
  * @param files 
  */
 async function addTagsWithModal(plugin: QuickTagPlugin, files: TFile[]){
-	var tag = await selectTag(plugin, getTagList, files)
+	let tag = await selectTag(plugin, getTagList, files)
 	addTagsDirectly(plugin, files, tag)
 }
 
@@ -430,7 +441,7 @@ async function addTagsWithModal(plugin: QuickTagPlugin, files: TFile[]){
  * 
  */
 async function addTagWithModal(plugin: QuickTagPlugin){
-	var currentFile = _getActiveFile()
+	let currentFile = _getActiveFile()
 	addTagsWithModal(plugin, currentFile)
 }
 
@@ -441,7 +452,7 @@ async function addTagWithModal(plugin: QuickTagPlugin){
  * @param files 
  */
 async function removeTagsWithModal(plugin: QuickTagPlugin, files: TFile[]){
-	var tag = await selectTag(plugin, getTagsOnFiles, files)
+	let tag = await selectTag(plugin, getTagsOnFiles, files)
 	removeTagsDirectly(plugin, files, tag)
 }
 
@@ -450,7 +461,7 @@ async function removeTagsWithModal(plugin: QuickTagPlugin, files: TFile[]){
  * 
  */
 async function removeTagWithModal(plugin: QuickTagPlugin){
-	var currentFile = _getActiveFile()
+	let currentFile = _getActiveFile()
 	removeTagsWithModal(plugin, currentFile)
 }
 
@@ -460,8 +471,8 @@ async function removeTagWithModal(plugin: QuickTagPlugin){
  * @param tag 
  */
 function toggleTagOnActive(tag: string){
-	var file = _getActiveFile()
-	var tag_added = _toggleTags(file, tag)
+	let file = _getActiveFile()
+	let tag_added = _toggleTags(file, tag)
 	tag_added[0] ? confirmationNotification('add', tag, file) : confirmationNotification('remove', tag, file)
 }
 
@@ -474,14 +485,14 @@ function toggleTagOnActive(tag: string){
  * @returns 
  */
 async function addTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tag: string){
-	var applicableFiles = getFilteredWithoutTag(files, tag)
+	let applicableFiles = getFilteredWithoutTag(files, tag)
 
 	if (applicableFiles.length == 0){
 		new Notice("No file tags to change!")
 		return
 	}
 
-	var confirm = await addDialogs('add', tag, applicableFiles.length)
+	let confirm = await addDialogs('add', tag, applicableFiles.length)
 
 	if (confirm || applicableFiles.length == 1){
 		await _addTagToMany(applicableFiles, tag.replace('#', ''), plugin).then(
@@ -496,7 +507,7 @@ async function addTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tag: stri
  * @param tag 
  */
 async function addTagDirectly(plugin: QuickTagPlugin, tag: string){
-	var file = _getActiveFile()
+	let file = _getActiveFile()
 	addTagsDirectly(plugin, file, tag)
 }
 
@@ -509,14 +520,14 @@ async function addTagDirectly(plugin: QuickTagPlugin, tag: string){
  * @returns 
  */
 async function removeTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tag: string){
-	var applicableFiles = getFilteredWithTag(files, tag)
+	let applicableFiles = getFilteredWithTag(files, tag)
 
 	if (applicableFiles.length == 0){
 		new Notice("No file tags to change!")
 		return
 	}
 
-	var confirm = await addDialogs('remove', tag, applicableFiles.length)
+	let confirm = await addDialogs('remove', tag, applicableFiles.length)
 
 	if (confirm || applicableFiles.length == 1){
 		await _removeTagFromMany(applicableFiles, tag.replace('#', ''), plugin).then(
@@ -530,6 +541,6 @@ async function removeTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tag: s
  * 
  */
 async function removeTagDirectly(plugin: QuickTagPlugin, tag: string){
-	var file = _getActiveFile()
+	let file = _getActiveFile()
 	removeTagsDirectly(plugin, file, tag)
 }

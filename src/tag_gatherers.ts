@@ -13,8 +13,8 @@ export { getTagList, getTagsOnFiles, getNonStarredTags }
  */
 function getTagList(settings: QuickTaggerSettings, fileList?:TFile[]){
 	// TODO: add filtering to remove tags that are already on the active file?
-	var tagSettings = getStarredTags(settings, 'cut_in_line')
-	var tag_array = tagSettings.map((e) => e.replace('#', ''))
+	let tagSettings = getStarredTags(settings, 'cut_in_line')
+	let tag_array = tagSettings.map((e) => e.replace('#', ''))
 	                           .filter((e) => e)
 							   .map((e) => '#' + e)
 	
@@ -22,7 +22,7 @@ function getTagList(settings: QuickTaggerSettings, fileList?:TFile[]){
 		return tag_array
 	}
 	
-    var tag_cache = getTagsFromAppCache()
+    let tag_cache = getTagsFromAppCache()
 	tag_cache.sort()
 	tag_cache.forEach(tag => {
 		if (tag_array.indexOf(tag) == -1){
@@ -40,10 +40,10 @@ function getTagList(settings: QuickTaggerSettings, fileList?:TFile[]){
  * @returns 
  */
 function getTagsOnFiles(settings: QuickTaggerSettings, fileList:TFile[]){
-	var tag_array = [] as string[]
+	let tag_array = [] as string[]
 	fileList.forEach((f) =>{
-		var cache = this.app.metadataCache.getFileCache(f)
-		var new_tags = parseFrontMatterTags(cache.frontmatter)
+		let cache = this.app.metadataCache.getFileCache(f)
+		let new_tags = parseFrontMatterTags(cache.frontmatter)
 		if(new_tags){
 			new_tags.map((e) => e.replace('#', '')).filter((e) => e).map((e) => '#' + e)
 			new_tags.forEach((item) =>{
@@ -64,8 +64,8 @@ function getTagsOnFiles(settings: QuickTaggerSettings, fileList:TFile[]){
  * @returns 
  */
 function getNonStarredTags(settings: QuickTaggerSettings, fileList?:TFile[]){
-	var tag_array = getTagsFromAppCache()
-	var starredTags = getStarredTags(settings)
+	let tag_array = getTagsFromAppCache()
+	let starredTags = getStarredTags(settings)
 	starredTags.forEach(t => tag_array.remove(t))
 	tag_array.sort()
 	return tag_array
@@ -79,7 +79,7 @@ function getNonStarredTags(settings: QuickTaggerSettings, fileList?:TFile[]){
  * @returns 
  */
 function getStarredTags(settings: QuickTaggerSettings, filter_key?:string){
-	var results = [] as string[]
+	let results = [] as string[]
 	settings.priorityTags.forEach((t) => {
         if(filter_key){
             // if the settings are not enabled for 'filter_key', skip adding tag to result list
@@ -97,7 +97,7 @@ function getStarredTags(settings: QuickTaggerSettings, filter_key?:string){
  * @returns string[] of tags
  */
 function getTagsFromAppCache(){
-	var results = [] as string[]
+	let results = [] as string[]
 	for (const key in this.app.metadataCache.getTags()){
 		results.push(key)
 	}

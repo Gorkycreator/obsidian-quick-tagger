@@ -16,7 +16,7 @@ function getFilteredWithTag(fileList:TFile[], tag:string){
     // early exit if the "tag" is a special command.
 	if (SPECIAL_COMMANDS.includes(tag)){ return fileList }
 
-	var resultList = fileList.filter(file => filterTag(file, tag) == true)
+	let resultList = fileList.filter(file => filterTag(file, tag) == true)
 	return resultList
 }
 
@@ -31,7 +31,7 @@ function getFilteredWithoutTag(fileList:TFile[], tag:string){
     // early exit if the "tag" is a special command.
 	if (SPECIAL_COMMANDS.includes(tag)){ return fileList }
 
-	var resultList = fileList.filter(file => filterTag(file, tag) == false)
+	let resultList = fileList.filter(file => filterTag(file, tag) == false)
 	return resultList
 }
 
@@ -43,8 +43,8 @@ function getFilteredWithoutTag(fileList:TFile[], tag:string){
  * @returns 
  */
 function filterTag(thisFile: TFile, tag: string){
-	var cache = this.app.metadataCache.getFileCache(thisFile)
-	var existing_tags = parseFrontMatterTags(cache.frontmatter)
+	let cache = this.app.metadataCache.getFileCache(thisFile)
+	let existing_tags = parseFrontMatterTags(cache.frontmatter)
 	if (existing_tags?.includes(tag)){
 		return true
 	} else {
@@ -59,6 +59,6 @@ function filterTag(thisFile: TFile, tag: string){
  * @returns 
  */
 function onlyTaggableFiles(fileList: TFile[]){
-	var resultList = fileList.filter(file => (file.extension ? true : false) == true && file.extension == "md")
+	let resultList = fileList.filter(file => (file.extension ? true : false) == true && file.extension == "md")
 	return resultList
 }

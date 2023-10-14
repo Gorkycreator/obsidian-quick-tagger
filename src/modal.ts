@@ -7,13 +7,14 @@ export { ConfirmModal, QuickTagSelector }
  * 
  */
 class QuickTagSelector extends FuzzySuggestModal<string> {
+    onChooseItem: (result: string) => void
     gatherer: Function
     settings: QuickTaggerSettings
     fileList: TFile[]
     tag: string
 
     
-    constructor (plugin: QuickTagPlugin, gatherer: Function, fileList: Array<TFile>){
+    constructor (plugin: QuickTagPlugin, gatherer: Function, fileList: Array<TFile>, onChooseItem: (result: boolean) => void){
         super(plugin.app)
         this.gatherer = gatherer
         this.settings = plugin.settings
@@ -27,7 +28,7 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
             return []
         } 
 
-        var results = this.gatherer(this.settings, this.fileList)
+        let results = this.gatherer(this.settings, this.fileList)
         return results
     }
 
@@ -36,9 +37,9 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
     }
 
     // this should be overwritten when called to hook into a promise's resolve
-    async onChooseItem(tag: string) {
-        this.tag = tag
-    }
+    // async onChooseItem(tag: string) {
+    //     this.tag = tag
+    // }
 }
 
 
@@ -46,8 +47,8 @@ class ConfirmModal extends Modal {
     onSubmit: (result: boolean) => void;
     message: string
 
-	constructor(app: App, onSubmit: (result: boolean) => void, message: string) {
-		super(app);
+	constructor(thisApp: App, onSubmit: (result: boolean) => void, message: string) {
+		super(thisApp);
         this.onSubmit = onSubmit
         this.message = message
 	}

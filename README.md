@@ -5,8 +5,8 @@ This is a plugin for [Obsidian](https://obsidian.md) that adds commands and a GU
 Originally developed to improve my personal workflow, it's very handy in conjunction with [Obsidian Commander](https://github.com/phibr0/obsidian-commander).
 
 ## Features
-- No more typing in yaml headers just to add tags!
-- Independent add/remove commands to minimize flicking through menus
+- Command to add tags to Yaml headers.
+- Independent add/remove commands to minimize clicking through menus
 - Right click on file(s) to add tags
 - Tag all search results
 - Starred Tags
@@ -26,7 +26,7 @@ Note that this demo was recorded on mobile with buttons added to the title bar v
 Starred tags have the following features, each independently configurable:
   - Add tag to top of the list when selecting a tag
   - Add right-click context entry
-  - Add Obsidian command to toggle the tag on the current note (use this to make hotkeys!)
+  - Add Obsidian command to toggle the tag on the current note (use this to make keyboard shortcuts!)
   - Add status bar button to toggle the command on the current note
 
 ![starred-tag-demo](images/starred-tag-demo.gif)
@@ -43,9 +43,10 @@ This plugin does not keep track of changes in an undo/redo queue, please be awar
 - [x] Add command for starred tag
 - [x] Add button for starred tag in status bar
 - [x] Add right-click context menu option for starred tag
+- [ ] Tweak right-click behavior to toggle tags when tagging a single note
+- [ ] Permit adding new tag from tag selector
 - [ ] Repeat last tag command
 - [ ] Tag chains (cycle through a list of tags)
-- [ ] Permit adding new tag from tag selector
 
 ## Manually install the plugin
 

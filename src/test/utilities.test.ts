@@ -78,3 +78,4 @@ test('remove all tags', () => {
     execution.run()(mock_yaml);
     expect(mock_yaml).toStrictEqual(removal_all_fixed_mock_yaml)
 })
+

@@ -44,10 +44,10 @@ export default class QuickTagPlugin extends Plugin {
 		await this.loadSettings();
 		
 		// Add Dynamic commands/status bar buttons
-		var starredTags = this.settings.priorityTags
+		let starredTags = this.settings.priorityTags
 		starredTags.forEach((t) => {
 			if(t.add_command){
-				dynamicToggleCommand(app, this, t)
+				dynamicToggleCommand(this.app, this, t)
 			}
 		})
 
@@ -121,7 +121,7 @@ export default class QuickTagPlugin extends Plugin {
 
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
-				var thisFile = onlyTaggableFiles([file])
+				let thisFile = onlyTaggableFiles([file])
 				if(thisFile.length < 1){return}
 				menu.addItem((item) =>{
 					item
@@ -136,7 +136,7 @@ export default class QuickTagPlugin extends Plugin {
 
 		this.registerEvent(
 			this.app.workspace.on('file-menu', (menu, file) => {
-				var thisFile = onlyTaggableFiles([file])
+				let thisFile = onlyTaggableFiles([file])
 				if(thisFile.length < 1){return}
 				dynamicAddMenuItems(menu, thisFile, this)
 			})
@@ -144,7 +144,7 @@ export default class QuickTagPlugin extends Plugin {
 
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
-				var thisFile = onlyTaggableFiles([file])
+				let thisFile = onlyTaggableFiles([file])
 				if(thisFile.length < 1){return}
 				menu.addItem((item) =>{
 					item
@@ -160,7 +160,7 @@ export default class QuickTagPlugin extends Plugin {
 		// Search Results menu commands
 		this.registerEvent(
 			this.app.workspace.on("search:results-menu", (menu, leaf) => {
-				var files = [] as TFile[]
+				let files = [] as TFile[]
 				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this!
 				files = onlyTaggableFiles(files)
 				if(files.length < 1){return}
@@ -178,7 +178,7 @@ export default class QuickTagPlugin extends Plugin {
 
 		this.registerEvent(
 			this.app.workspace.on("search:results-menu", (menu, leaf) => {
-				var files = [] as TFile[]
+				let files = [] as TFile[]
 				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this, too
 				files = onlyTaggableFiles(files)
 				if(files.length < 1){return}
@@ -189,7 +189,7 @@ export default class QuickTagPlugin extends Plugin {
 
 		this.registerEvent(
 			this.app.workspace.on("search:results-menu", (menu, leaf) => {
-				var files = [] as TFile[]
+				let files = [] as TFile[]
 				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this, really.
 				files = onlyTaggableFiles(files)
 				if(files.length < 1){return}
@@ -205,7 +205,7 @@ export default class QuickTagPlugin extends Plugin {
 			})
 		)
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
+		// This adds a settings tab so the user can configure letious aspects of the plugin
 		this.addSettingTab(new QuickTagSettingTab(this.app, this));
 
 		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
@@ -235,10 +235,10 @@ export default class QuickTagPlugin extends Plugin {
 			this._statusBarItem.forEach((t) => t.remove())
 		}
 		
-		var starredTags = this.settings.priorityTags
+		let starredTags = this.settings.priorityTags
 		starredTags.forEach((t) => {
 			if (t.status_bar){
-				var item_to_add = this.addStatusBarItem()
+				let item_to_add = this.addStatusBarItem()
 				this._statusBarItem.push(item_to_add)
 				item_to_add.classList.add("mod-clickable")
 				item_to_add.setText(t.tag_value)
@@ -260,10 +260,10 @@ export default class QuickTagPlugin extends Plugin {
 class QuickTagSettingTab extends PluginSettingTab {
 	plugin: QuickTagPlugin;
 
-	constructor(app: App, plugin: QuickTagPlugin) {
-		super(app, plugin);
+	constructor(thisApp: App, plugin: QuickTagPlugin) {
+		super(thisApp, plugin);
 		this.plugin = plugin;
-		this.app = app;
+		this.app = thisApp;
 	}
 
 	display(): void {
@@ -319,37 +319,37 @@ class QuickTagSettingTab extends PluginSettingTab {
 		new Setting(div)
 		.addButton(btn => {
 			btn.setIcon('star');
-			var msg = "The first toggle on a starred tag moves it to the top of the list when selecting a tag for your notes.";
+			let msg = "The first toggle on a starred tag moves it to the top of the list when selecting a tag for your notes.";
 			btn.onClick(() => new Notice(msg,6000))
 			btn.setTooltip(msg)
 		})
 		.addButton(btn => {btn.setIcon('chevron-right-square');
-			var msg = "The second toggle on a starred tag adds a command for it so you can create a hotkey, etc.  --- NOT IMPLEMENTED";
+			let msg = "The second toggle on a starred tag adds a command for it so you can create a hotkey, etc.  --- NOT IMPLEMENTED";
 			btn.onClick(() => new Notice(msg,6000))
 			btn.setTooltip(msg)
 		})
 		.addButton(btn => {btn.setIcon('martini');
-			var msg = "The third toggle on a starred tag adds a button for it to the status bar.  --- NOT IMPLEMENTED";
+			let msg = "The third toggle on a starred tag adds a button for it to the status bar.  --- NOT IMPLEMENTED";
 			btn.onClick(() => new Notice(msg,6000))
 			btn.setTooltip(msg)
 		})
 		.addButton(btn => {btn.setIcon('mouse-pointer-click');
-			var msg = "The fourth toggle on a starred tag adds it to the context menu.  --- NOT IMPLEMENTED";
+			let msg = "The fourth toggle on a starred tag adds it to the context menu.  --- NOT IMPLEMENTED";
 			btn.onClick(() => new Notice(msg,6000))
 			btn.setTooltip(msg)
 		})
 		.addButton(btn => {btn.setIcon('up-arrow-with-tail');
-			var msg = "The up arrow button moves the starred tag up on the starred tag list. This affects the order it's displayed in the tag selection dialog.";
+			let msg = "The up arrow button moves the starred tag up on the starred tag list. This affects the order it's displayed in the tag selection dialog.";
 			btn.onClick(() => new Notice(msg,6000))
 			btn.setTooltip(msg)
 		})
 		.addButton(btn => {btn.setIcon('down-arrow-with-tail');
-			var msg = "The down arrow button moves the starred tag down on the starred tag list. This affects the order it's displayed in the tag selection dialog.";
+			let msg = "The down arrow button moves the starred tag down on the starred tag list. This affects the order it's displayed in the tag selection dialog.";
 			btn.onClick(() => new Notice(msg,6000))
 			btn.setTooltip(msg)
 		})
 		.addButton(btn => {btn.setIcon('trash');
-			var msg = "The trash can button removes the starred tag from the starred list.";
+			let msg = "The trash can button removes the starred tag from the starred list.";
 			btn.onClick(() => new Notice(msg,6000))
 			btn.setTooltip(msg)
 		})
