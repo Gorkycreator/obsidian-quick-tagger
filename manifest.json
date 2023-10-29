@@ -5,7 +5,7 @@
 	"minAppVersion": "1.3.0",
 	"description": "Add and remove tags quickly. Tag search results, bulk tag, and add dedicated buttons/commands for your favorites!",
 	"author": "Gorkycreator",
-	"authorUrl": "https://www.warneranimation.com",
+	"authorUrl": "https://github.com/Gorkycreator/obsidian-quick-tagger",
 	"fundingUrl": "",
 	"isDesktopOnly": false
 }

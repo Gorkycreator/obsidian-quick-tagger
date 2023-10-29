@@ -14,12 +14,13 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
     tag: string
 
     
-    constructor (plugin: QuickTagPlugin, gatherer: Function, fileList: Array<TFile>, onChooseItem: (result: boolean) => void){
+    constructor (plugin: QuickTagPlugin, gatherer: Function, onChooseItem: (result: string) => void, fileList?: Array<TFile>){
         super(plugin.app)
         this.gatherer = gatherer
         this.settings = plugin.settings
-        this.fileList = fileList
+        this.fileList = fileList ? fileList : []
         this.tag = ''
+        this.onChooseItem = onChooseItem
     }
 
     getItems(): string[] {
@@ -35,11 +36,6 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
     getItemText(tag: string): string {
         return tag
     }
-
-    // this should be overwritten when called to hook into a promise's resolve
-    // async onChooseItem(tag: string) {
-    //     this.tag = tag
-    // }
 }
 
 

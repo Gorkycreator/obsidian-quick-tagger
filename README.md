@@ -7,7 +7,7 @@ Originally developed to improve my personal workflow, it's very handy in conjunc
 ## Features
 - Command to add tags to Yaml headers.
 - Independent add/remove commands to minimize clicking through menus
-- Right click on file(s) to add tags
+- Right click on note(s) to add tags
 - Tag all search results
 - Starred Tags
 
@@ -26,8 +26,8 @@ Note that this demo was recorded on mobile with buttons added to the title bar v
 Starred tags have the following features, each independently configurable:
   - Add tag to top of the list when selecting a tag
   - Add right-click context entry
-  - Add Obsidian command to toggle the tag on the current note (use this to make keyboard shortcuts!)
-  - Add status bar button to toggle the command on the current note
+  - Add Obsidian command to toggle the tag on the active note (use this to make keyboard shortcuts!)
+  - Add status bar button to toggle the command on the active note
 
 ![starred-tag-demo](images/starred-tag-demo.gif)
 

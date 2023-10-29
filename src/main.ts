@@ -1,5 +1,5 @@
-import { App, Notice, Plugin, TFile, PluginSettingTab, Setting } from 'obsidian';
-import { dynamicToggleCommand, dynamicAddMenuItems, addTagsWithModal, addTagWithModal,
+import { Notice, Plugin, TFile, PluginSettingTab, Setting, Menu, TAbstractFile, WorkspaceLeaf, SearchComponent, SearchResultContainer } from 'obsidian';
+import { dynamicToggleCommand, dynamicAddMenuItems, dynamicAddSingleFileMenuItems, addTagsWithModal, addTagWithModal,
 	toggleTagOnActive, selectTag, removeTagWithModal, removeTagsWithModal } from './utilities';
 import { getNonStarredTags } from './tag_gatherers';
 import { onlyTaggableFiles } from './file_filters';
@@ -74,7 +74,7 @@ export default class QuickTagPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: 'open-quick-tagger',
+			id: 'quick-remove-tag',
 			name: 'Remove Tag',
 			callback: () => {
 				removeTagWithModal(this)
@@ -83,7 +83,7 @@ export default class QuickTagPlugin extends Plugin {
 
 		// File Context menu commands
 		this.registerEvent(
-			this.app.workspace.on("files-menu", (menu, files) => {
+			this.app.workspace.on("files-menu", (menu: Menu, files: TFile[]) => {
 				files = onlyTaggableFiles(files)
 				if(files.length < 1){return}
 				menu.addItem((item) =>{
@@ -98,14 +98,14 @@ export default class QuickTagPlugin extends Plugin {
 		)
 
 		this.registerEvent(
-			this.app.workspace.on('files-menu', (menu, files) => {
+			this.app.workspace.on('files-menu', (menu: Menu, files: TFile[]) => {
 				if(files.length < 1){return}
 				dynamicAddMenuItems(menu, files, this)
 			})
 		)
 
 		this.registerEvent(
-			this.app.workspace.on("files-menu", (menu, files) => {
+			this.app.workspace.on("files-menu", (menu: Menu, files: TFile[]) => {
 				files = onlyTaggableFiles(files)
 				if(files.length < 1){return}
 				menu.addItem((item) =>{
@@ -120,7 +120,7 @@ export default class QuickTagPlugin extends Plugin {
 		)
 
 		this.registerEvent(
-			this.app.workspace.on("file-menu", (menu, file) => {
+			this.app.workspace.on("file-menu", (menu: Menu, file: TFile) => {
 				let thisFile = onlyTaggableFiles([file])
 				if(thisFile.length < 1){return}
 				menu.addItem((item) =>{
@@ -135,15 +135,15 @@ export default class QuickTagPlugin extends Plugin {
 		)
 
 		this.registerEvent(
-			this.app.workspace.on('file-menu', (menu, file) => {
+			this.app.workspace.on('file-menu', (menu: Menu, file: TFile) => {
 				let thisFile = onlyTaggableFiles([file])
 				if(thisFile.length < 1){return}
-				dynamicAddMenuItems(menu, thisFile, this)
+				dynamicAddSingleFileMenuItems(menu, thisFile[0], this)
 			})
 		)
 
 		this.registerEvent(
-			this.app.workspace.on("file-menu", (menu, file) => {
+			this.app.workspace.on("file-menu", (menu: Menu, file: TFile) => {
 				let thisFile = onlyTaggableFiles([file])
 				if(thisFile.length < 1){return}
 				menu.addItem((item) =>{
@@ -159,7 +159,7 @@ export default class QuickTagPlugin extends Plugin {
 
 		// Search Results menu commands
 		this.registerEvent(
-			this.app.workspace.on("search:results-menu", (menu, leaf) => {
+			this.app.workspace.on("search:results-menu", (menu: Menu, leaf: any) => {
 				let files = [] as TFile[]
 				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this!
 				files = onlyTaggableFiles(files)
@@ -167,7 +167,7 @@ export default class QuickTagPlugin extends Plugin {
 
 				menu.addItem((item) =>{
 					item
-					  .setTitle("Add Tags to " + files.length + " notes...")
+					  .setTitle("Add Tag to " + files.length + " notes...")
 					  .setIcon("tag")
 					  .onClick(() => {
 						addTagsWithModal(this, files)
@@ -177,9 +177,9 @@ export default class QuickTagPlugin extends Plugin {
 		)
 
 		this.registerEvent(
-			this.app.workspace.on("search:results-menu", (menu, leaf) => {
+			this.app.workspace.on("search:results-menu", (menu: Menu, leaf: any) => {
 				let files = [] as TFile[]
-				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this, too
+				leaf.dom.vChildren.children.forEach((e: any) => files.push(e.file))  // TODO: there must be a better way to do this, too
 				files = onlyTaggableFiles(files)
 				if(files.length < 1){return}
 
@@ -188,9 +188,9 @@ export default class QuickTagPlugin extends Plugin {
 		)
 
 		this.registerEvent(
-			this.app.workspace.on("search:results-menu", (menu, leaf) => {
+			this.app.workspace.on("search:results-menu", (menu: Menu, leaf: any) => {
 				let files = [] as TFile[]
-				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this, really.
+				leaf.dom.vChildren.children.forEach((e: any) => files.push(e.file))  // TODO: there must be a better way to do this, really.
 				files = onlyTaggableFiles(files)
 				if(files.length < 1){return}
 				
@@ -206,16 +206,16 @@ export default class QuickTagPlugin extends Plugin {
 		)
 
 		// This adds a settings tab so the user can configure letious aspects of the plugin
-		this.addSettingTab(new QuickTagSettingTab(this.app, this));
+		this.addSettingTab(new QuickTagSettingTab(this));
 
 		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
 		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
+		// this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
+		// 	console.log('click', evt);
+		// });
 
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+		// this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
 
 	onunload() {
@@ -260,10 +260,10 @@ export default class QuickTagPlugin extends Plugin {
 class QuickTagSettingTab extends PluginSettingTab {
 	plugin: QuickTagPlugin;
 
-	constructor(thisApp: App, plugin: QuickTagPlugin) {
-		super(thisApp, plugin);
+	constructor(plugin: QuickTagPlugin) {
+		super(plugin.app, plugin);
+		this.app = plugin.app;
 		this.plugin = plugin;
-		this.app = thisApp;
 	}
 
 	display(): void {

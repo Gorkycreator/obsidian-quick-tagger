@@ -4,7 +4,7 @@ import { ConfirmModal, QuickTagSelector } from './modal'
 import { getTagList, getTagsOnFiles } from './tag_gatherers'
 import { filterTag, getFilteredWithTag, getFilteredWithoutTag } from './file_filters'
 export { selectTag, addTagsWithModal, addTagWithModal, removeTagWithModal, removeTagsWithModal,
-	toggleTagOnActive, dynamicToggleCommand, dynamicAddMenuItems }
+	toggleTagOnActive, toggleTagOnFile, dynamicToggleCommand, dynamicAddMenuItems, dynamicAddSingleFileMenuItems }
 export { _formatHashTag, _addFrontMatterTag, _cleanNoteContent, _getRemovalProcessor, 
 	_removeAllFrontMatterTags, _removeFrontMatterTag }
 
@@ -297,23 +297,12 @@ function _conformToArray(input:string | Array<string>){
  * @param notes notes that this action will affect
  * @returns promise for a tag (string) selected from the modal
  */
-async function selectTag(plugin: QuickTagPlugin, gatherer: Function, notes?: TFile[]): Promise<string>{
-	// TODO: replace promise with an async function
+async function selectTag(plugin: QuickTagPlugin, gatherer?: Function, notes?: TFile[]): Promise<string>{
+	let active_gatherer = gatherer ? gatherer : getTagList
+	let active_notes = notes ? notes : []
 	return new Promise((resolve) => {
-		const modal = new QuickTagSelector(plugin, gatherer, notes ? notes : [], (result) => {tag = result});
-
-		// overwrite onChooseItem method so we can insert the resolve
-		modal.onChooseItem = async (tag: string) => {
-			resolve(tag)
-		}
-		modal.open()
+		new QuickTagSelector(plugin, active_gatherer, (result) => {resolve(result)}, active_notes).open();
 	})
-}
-
-async function launch_tag_selector(plugin, gatherer, notes){
-	let tag = null
-	new ConfirmModal(this.app, (result) => (tag = result), msg).open()
-	return tag
 }
 
 
@@ -384,6 +373,33 @@ function dynamicAddMenuItems(menu: Menu, files: TFile[], plugin: QuickTagPlugin)
 		}
 	})
 }
+
+
+/** Add menu items for configured starred tags
+ * 
+ * @param menu 
+ * @param files 
+ * @param plugin 
+ */
+function dynamicAddSingleFileMenuItems(menu: Menu, file: TFile, plugin: QuickTagPlugin){
+	let starredTags = plugin.settings.priorityTags
+	let currentTags = getTagsOnFiles(plugin.settings, [file])
+	starredTags.forEach((t) => {
+		if(t.right_click){
+			menu.addItem((item) =>{
+				let state = currentTags.includes(t.tag_value)
+				let title = state? `Remove ${t.tag_value}` : `Add ${t.tag_value}`
+				item
+				  .setTitle(title)
+				  .setIcon("tag")
+				  .onClick(async () => {
+					toggleTagOnFile(t.tag_value, [file])
+				  })
+			})
+		}
+	})
+}
+
 
 
 /** Spawn confirmation dialogs waring users about removing all and bulk edits
@@ -472,6 +488,11 @@ async function removeTagWithModal(plugin: QuickTagPlugin){
  */
 function toggleTagOnActive(tag: string){
 	let file = _getActiveFile()
+	toggleTagOnFile(tag, file)
+}
+
+
+function toggleTagOnFile(tag: string, file: TFile[]){
 	let tag_added = _toggleTags(file, tag)
 	tag_added[0] ? confirmationNotification('add', tag, file) : confirmationNotification('remove', tag, file)
 }
