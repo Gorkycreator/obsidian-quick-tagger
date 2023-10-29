@@ -1,6 +1,6 @@
-import { Notice, Plugin, TFile, PluginSettingTab, Setting, Menu, TAbstractFile, WorkspaceLeaf, SearchComponent, SearchResultContainer } from 'obsidian';
-import { dynamicToggleCommand, dynamicAddMenuItems, dynamicAddSingleFileMenuItems, addTagsWithModal, addTagWithModal,
-	toggleTagOnActive, selectTag, removeTagWithModal, removeTagsWithModal } from './utilities';
+import { Notice, Plugin, TFile, PluginSettingTab, Setting, Menu } from 'obsidian';
+import { dynamicToggleCommand, dynamicAddMenuItems, addTagsWithModal, addTagWithModal, toggleTagOnActive,
+	     selectTag, removeTagWithModal, removeTagsWithModal } from './utilities';
 import { getNonStarredTags } from './tag_gatherers';
 import { onlyTaggableFiles } from './file_filters';
 
@@ -22,6 +22,7 @@ export interface StarredTag {
 export interface QuickTaggerSettings {
 	all_tags: boolean;
 	priorityTags: StarredTag[];
+	last_used_tag: string;
 }
 
 /** default settings for when none exist
@@ -29,7 +30,8 @@ export interface QuickTaggerSettings {
  */
 const DEFAULT_SETTINGS: QuickTaggerSettings = {
 	all_tags: true,
-	priorityTags: []
+	priorityTags: [],
+	last_used_tag: ''
 }
 
 
@@ -47,7 +49,7 @@ export default class QuickTagPlugin extends Plugin {
 		let starredTags = this.settings.priorityTags
 		starredTags.forEach((t) => {
 			if(t.add_command){
-				dynamicToggleCommand(this.app, this, t)
+				dynamicToggleCommand(this, t)
 			}
 		})
 
@@ -67,7 +69,7 @@ export default class QuickTagPlugin extends Plugin {
 		// Command Pallet Commands
 		this.addCommand({
 			id: 'quick-add-tag',
-			name: 'Add Tag',
+			name: 'Add tag',
 			callback: () => {
 				addTagWithModal(this)
 			}
@@ -75,11 +77,19 @@ export default class QuickTagPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'quick-remove-tag',
-			name: 'Remove Tag',
+			name: 'Remove tag',
 			callback: () => {
 				removeTagWithModal(this)
 			}
 		});
+
+		this.addCommand({
+			id: 'repeat-last-tag',
+			name: `Toggle recently used tag (none)`,
+			callback: () => {
+				new Notice("ERROR: No recent tag, please assign a tag with Quick Tagger before using this command")
+			}
+		})
 
 		// File Context menu commands
 		this.registerEvent(
@@ -138,7 +148,7 @@ export default class QuickTagPlugin extends Plugin {
 			this.app.workspace.on('file-menu', (menu: Menu, file: TFile) => {
 				let thisFile = onlyTaggableFiles([file])
 				if(thisFile.length < 1){return}
-				dynamicAddSingleFileMenuItems(menu, thisFile[0], this)
+				dynamicAddMenuItems(menu, thisFile, this)
 			})
 		)
 
@@ -161,7 +171,7 @@ export default class QuickTagPlugin extends Plugin {
 		this.registerEvent(
 			this.app.workspace.on("search:results-menu", (menu: Menu, leaf: any) => {
 				let files = [] as TFile[]
-				leaf.dom.vChildren.children.forEach((e) => files.push(e.file))  // TODO: there must be a better way to do this!
+				leaf.dom.vChildren.children.forEach((e: any) => files.push(e.file))  // TODO: there must be a better way to do this!
 				files = onlyTaggableFiles(files)
 				if(files.length < 1){return}
 
@@ -218,8 +228,9 @@ export default class QuickTagPlugin extends Plugin {
 		// this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
 
-	onunload() {
-
+	async onunload() {
+		this.settings.last_used_tag = ""
+		await this.saveSettings()
 	}
 
 	async loadSettings() {
@@ -245,7 +256,7 @@ export default class QuickTagPlugin extends Plugin {
 				item_to_add.setAttribute("aria-label", `Toggle #${t.tag_value} on active note`);
 				item_to_add.setAttribute("aria-label-position", "top");
 				item_to_add.addEventListener("click", async () => {
-					toggleTagOnActive(t.tag_value)
+					toggleTagOnActive(this, t.tag_value)
 				});
 			}
 		}
@@ -374,7 +385,7 @@ class QuickTagSettingTab extends PluginSettingTab {
 						.onChange(async (value) => {
 							tag.add_command = value;
 							await this.plugin.saveSettings();
-							dynamicToggleCommand(this.app, this.plugin, tag);
+							dynamicToggleCommand(this.plugin, tag);
 							new Notice(tag.add_command ? `Added ${tag.tag_value} command` : `Removed ${tag.tag_value} command`)
 						});
 						toggle.setTooltip("Add command for this tag")

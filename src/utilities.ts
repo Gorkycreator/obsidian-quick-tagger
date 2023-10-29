@@ -1,10 +1,10 @@
 import{ Notice, App, TFile, Menu } from 'obsidian'
-import QuickTagPlugin, { StarredTag } from "./main"
+import QuickTagPlugin, { QuickTaggerSettings, StarredTag } from "./main"
 import { ConfirmModal, QuickTagSelector } from './modal'
 import { getTagList, getTagsOnFiles } from './tag_gatherers'
 import { filterTag, getFilteredWithTag, getFilteredWithoutTag } from './file_filters'
 export { selectTag, addTagsWithModal, addTagWithModal, removeTagWithModal, removeTagsWithModal,
-	toggleTagOnActive, toggleTagOnFile, dynamicToggleCommand, dynamicAddMenuItems, dynamicAddSingleFileMenuItems }
+	toggleTagOnActive, toggleTagOnFile, dynamicToggleCommand, dynamicAddMenuItems }
 export { _formatHashTag, _addFrontMatterTag, _cleanNoteContent, _getRemovalProcessor, 
 	_removeAllFrontMatterTags, _removeFrontMatterTag }
 
@@ -330,27 +330,28 @@ function confirmationNotification(mode:string, tag:string, applicableFiles: TFil
  * @param StarredTag 
  * @returns 
  */
-function dynamicToggleCommand(thisApp: App, plugin: QuickTagPlugin, StarredTag: StarredTag){
+function dynamicToggleCommand(plugin: QuickTagPlugin, StarredTag: StarredTag){
 	let tag = StarredTag.tag_value.replace('#', '')
 	let commandId = `quick-add-tag:${tag}`
 	let fullId = `obsidian-quick-tagger:${commandId}`
 	let state = false
 
-	if(thisApp.commands.findCommand(fullId)) {
-		delete thisApp.commands.commands[fullId];
-		delete thisApp.commands.editorCommands[fullId];
+	if(plugin.app.commands.findCommand(fullId)) {
+		delete plugin.app.commands.commands[fullId];
+		delete plugin.app.commands.editorCommands[fullId];
 	} else {
 		plugin.addCommand({
 			id: commandId,
 			name: `Toggle #${tag}`,
 			callback: () => {
-				toggleTagOnActive(tag)
+				toggleTagOnActive(plugin, tag)
 			}
 		})
 		state = true
 	}
 	return state
 }
+
 
 /** Add menu items for configured starred tags
  * 
@@ -360,40 +361,24 @@ function dynamicToggleCommand(thisApp: App, plugin: QuickTagPlugin, StarredTag: 
  */
 function dynamicAddMenuItems(menu: Menu, files: TFile[], plugin: QuickTagPlugin){
 	let starredTags = plugin.settings.priorityTags
+
+	let singleFile = files.length == 1
+	let singleFileTags = singleFile ? getTagsOnFiles(plugin.settings, files) : []
+	let operation = singleFile ? toggleTagOnFile : addTagsDirectly
+
 	starredTags.forEach((t) => {
 		if(t.right_click){
 			menu.addItem((item) =>{
-				item
-				  .setTitle(`Tag with ${t.tag_value}`)
-				  .setIcon("tag")
-				  .onClick(async () => {
-					addTagsDirectly(plugin, files, t.tag_value)
-				  })
-			})
-		}
-	})
-}
-
-
-/** Add menu items for configured starred tags
- * 
- * @param menu 
- * @param files 
- * @param plugin 
- */
-function dynamicAddSingleFileMenuItems(menu: Menu, file: TFile, plugin: QuickTagPlugin){
-	let starredTags = plugin.settings.priorityTags
-	let currentTags = getTagsOnFiles(plugin.settings, [file])
-	starredTags.forEach((t) => {
-		if(t.right_click){
-			menu.addItem((item) =>{
-				let state = currentTags.includes(t.tag_value)
-				let title = state? `Remove ${t.tag_value}` : `Add ${t.tag_value}`
+				let title = `Tag with ${t.tag_value}`
+				if (singleFile){
+					let state = singleFileTags.includes(t.tag_value)
+					title = state ? `Remove ${t.tag_value}` : `Add ${t.tag_value}`
+				}
 				item
 				  .setTitle(title)
 				  .setIcon("tag")
 				  .onClick(async () => {
-					toggleTagOnFile(t.tag_value, [file])
+					operation(plugin, files, t.tag_value)
 				  })
 			})
 		}
@@ -486,13 +471,14 @@ async function removeTagWithModal(plugin: QuickTagPlugin){
  * 
  * @param tag 
  */
-function toggleTagOnActive(tag: string){
+function toggleTagOnActive(plugin: QuickTagPlugin, tag: string){
 	let file = _getActiveFile()
-	toggleTagOnFile(tag, file)
+	toggleTagOnFile(plugin, file, tag)
 }
 
 
-function toggleTagOnFile(tag: string, file: TFile[]){
+function toggleTagOnFile(plugin: QuickTagPlugin, file: TFile[], tag: string){
+	update_last_used_tag(plugin, tag)
 	let tag_added = _toggleTags(file, tag)
 	tag_added[0] ? confirmationNotification('add', tag, file) : confirmationNotification('remove', tag, file)
 }
@@ -516,6 +502,7 @@ async function addTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tag: stri
 	let confirm = await addDialogs('add', tag, applicableFiles.length)
 
 	if (confirm || applicableFiles.length == 1){
+		update_last_used_tag(plugin, tag)
 		await _addTagToMany(applicableFiles, tag.replace('#', ''), plugin).then(
 			() => confirmationNotification('add', tag, applicableFiles)
 		)
@@ -551,6 +538,7 @@ async function removeTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tag: s
 	let confirm = await addDialogs('remove', tag, applicableFiles.length)
 
 	if (confirm || applicableFiles.length == 1){
+		update_last_used_tag(plugin, tag)
 		await _removeTagFromMany(applicableFiles, tag.replace('#', ''), plugin).then(
 			() => confirmationNotification('remove', tag, applicableFiles)
 		)
@@ -564,4 +552,25 @@ async function removeTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tag: s
 async function removeTagDirectly(plugin: QuickTagPlugin, tag: string){
 	let file = _getActiveFile()
 	removeTagsDirectly(plugin, file, tag)
+}
+
+
+async function update_last_used_tag(plugin: QuickTagPlugin, tag: string){
+	plugin.settings.last_used_tag = tag
+	await plugin.saveSettings()
+
+	let commandId = 'repeat-last-tag'
+
+	if(plugin.app.commands.findCommand(commandId)) {
+		delete plugin.app.commands.commands[commandId];
+		delete plugin.app.commands.editorCommands[commandId];
+	}
+
+	plugin.addCommand({
+		id: commandId,
+		name: `Toggle recently used tag (${tag})`,
+		callback: () => {
+			toggleTagOnActive(plugin, tag)
+		}
+	})
 }

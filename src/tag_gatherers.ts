@@ -3,6 +3,60 @@ import { QuickTaggerSettings, StarredTag } from "./main"
 import { TFile, parseFrontMatterTags } from "obsidian"
 export { getTagList, getTagsOnFiles, getNonStarredTags }
 
+
+
+export interface TagGatherer {
+	_new_tag_permission: boolean
+	retrieve: (settings: QuickTaggerSettings, fileList?:TFile[], filter_key?:string) => string[]
+}
+
+
+class BaseGatherer implements TagGatherer {
+	_new_tag_permission = true;
+
+	retrieve(settings:QuickTaggerSettings, fileList?:TFile[]) {
+		return ['pass']
+	}
+
+	enable_new_tag_permission(){
+		this._new_tag_permission = true
+	}
+
+	disable_new_tag_permission(){
+		this._new_tag_permission = false
+	}
+
+	get_new_tag_permission(){
+		return this._new_tag_permission
+	}
+}
+
+
+class TagList extends BaseGatherer {
+	_new_tag_permission = true;
+
+	retrieve(settings:QuickTaggerSettings, fileList?:TFile[]) {
+		let tagSettings = getStarredTags(settings, 'cut_in_line')
+		let tag_array = tagSettings.map((e) => e.replace('#', ''))
+								.filter((e) => e)
+								.map((e) => '#' + e)
+		
+		if (!settings.all_tags){
+			return tag_array
+		}
+		
+		let tag_cache = getTagsFromAppCache()
+		tag_cache.sort()
+		tag_cache.forEach(tag => {
+			if (tag_array.indexOf(tag) == -1){
+				tag_array.push(tag)
+			}
+		})
+		return tag_array
+	}
+}
+
+
 /** Build a list of tags starting with configured starred tags. Used for adding tags to notes.
  * If the option is set, add all tags in Obsidian to the list as
  * well.
@@ -11,7 +65,7 @@ export { getTagList, getTagsOnFiles, getNonStarredTags }
  * @param fileList
  * @returns string[] of tags
  */
-function getTagList(settings: QuickTaggerSettings, fileList?:TFile[]){
+function getTagList(settings: QuickTaggerSettings, fileList?:TFile[]): string[]{
 	// TODO: add filtering to remove tags that are already on the active file?
 	let tagSettings = getStarredTags(settings, 'cut_in_line')
 	let tag_array = tagSettings.map((e) => e.replace('#', ''))
