@@ -1,8 +1,9 @@
 import{ Notice, App, TFile, Menu } from 'obsidian'
-import QuickTagPlugin, { QuickTaggerSettings, StarredTag } from "./main"
+import QuickTagPlugin, { StarredTag } from "./main"
 import { ConfirmModal, QuickTagSelector } from './modal'
 import { AddTagList, TagGatherer, TagsOnFiles } from './tag_gatherers'
 import { filterTag, getFilteredWithTag, getFilteredWithoutTag } from './file_filters'
+import { WOAH_LOTS_OF_FILES } from './constants'
 export { selectTag, addTagsWithModal, addTagWithModal, removeTagWithModal, removeTagsWithModal,
 	toggleTagOnActive, toggleTagOnFile, dynamicToggleCommand, dynamicAddMenuItems }
 export { _formatHashTag, _addFrontMatterTag, _cleanNoteContent, _getRemovalProcessor, 
@@ -10,7 +11,6 @@ export { _formatHashTag, _addFrontMatterTag, _cleanNoteContent, _getRemovalProce
 
 const tag_key = 'tags'
 const tag_cleanup = ['tag', 'Tag', 'Tags']
-const WOAH_LOTS_OF_FILES = 100
 
 
 /** Gets the active file

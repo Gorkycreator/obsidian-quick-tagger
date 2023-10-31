@@ -1,4 +1,5 @@
 export const SPECIAL_COMMANDS = ['REMOVE ALL']
+export const WOAH_LOTS_OF_FILES = 20
 
 export const KNOWN_BAD_CHARACTERS = [
     "‒",
