@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-quick-tagger",
-	"version": "2.1.2",
+	"version": "2.2.0",
 	"description": "Add and remove tags quickly. Tag search results, bulk tag, and add dedicated buttons/commands for your favorites!",
 	"main": "src/main.ts",
 	"scripts": {
