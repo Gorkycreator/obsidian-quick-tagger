@@ -1,5 +1,8 @@
 import { App, FuzzySuggestModal, Modal, Setting, Notice, TFile, renderResults, prepareFuzzySearch, FuzzyMatch, fuzzySearch, prepareQuery } from "obsidian";
 import QuickTagPlugin, {QuickTaggerSettings} from "./main"
+import { SPECIAL_COMMANDS } from "./constants"
+import { prep_clean_query } from "clean_inputs";
+import { TagGatherer } from "tag_gatherers";
 export { ConfirmModal, QuickTagSelector }
 
 
@@ -15,20 +18,20 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
     tag: string
     inputListener: EventListener
     tagCache: string[]
-    disable_new: boolean
+    new_tags_enabled: boolean
 
     
-    constructor (plugin: QuickTagPlugin, gatherer: Function, onChooseItemCallback: (result: string) => void, fileList?: Array<TFile>){
+    constructor (plugin: QuickTagPlugin, gatherer: TagGatherer, onChooseItemCallback: (result: string) => void, fileList?: Array<TFile>){
         super(plugin.app)
         this.plugin = plugin
-        this.gatherer = gatherer // .retrieve
+        this.gatherer = gatherer.retrieve_tags
         this.settings = plugin.settings
         this.fileList = fileList ? fileList : []
         this.tag = ''
         this.onChooseItemCallback = onChooseItemCallback
         this.inputListener = this.listenInput.bind(this)
         this.tagCache = []
-        this.disable_new = false // gatherer.get_new_tag_permission()
+        this.new_tags_enabled = gatherer.get_new_tag_permission()
     }
 
     onOpen() {
@@ -47,13 +50,15 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
     }
 
     override getSuggestions(query: string): FuzzyMatch<string>[] {
-        let cleaned_query = query.replace(/[^\w\p{Emoji_Presentation}]/gu, '')
-        
+        let cleaned_query = prep_clean_query(query, this.plugin)  // TODO: make the settings determine this
+
         let search = prepareFuzzySearch(cleaned_query)
         
         let options = this.getItems()
-        if(!this.disable_new) {
-            options = options.concat(["#" + cleaned_query + " (new tag)"])
+        if(this.new_tags_enabled) {
+            if (!/^[0-9]+$/.test(cleaned_query)){  // pure numeric entries are not valid tags
+                options = options.concat(["#" + cleaned_query + " (new tag)"])
+            }
         }
         
         let result: FuzzyMatch<string>[] = []
@@ -75,7 +80,7 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
         }
 
         if(this.tagCache.length == 0){
-            this.tagCache = this.gatherer(this.settings, this.fileList)
+            this.tagCache = this.gatherer(this, this.fileList)
         }
         
         return this.tagCache
@@ -85,9 +90,13 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
         return tag
     }
 
-    onChooseItem(result: string) {
-        let cleaned_tag = result.split(' ')[0]
-        console.log("The results are.... " + cleaned_tag)
+    async onChooseItem(result: string) {
+        console.log(result)
+        console.log(SPECIAL_COMMANDS)
+        console.log(SPECIAL_COMMANDS.includes(result))
+        let cleaned_tag = SPECIAL_COMMANDS.includes(result) ? result : result.split(' ')[0]
+        console.log("the cleaned tag is")
+        console.log(cleaned_tag)
         this.onChooseItemCallback(cleaned_tag)
     }
 }

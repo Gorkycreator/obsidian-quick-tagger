@@ -1,7 +1,7 @@
 import{ Notice, App, TFile, Menu } from 'obsidian'
 import QuickTagPlugin, { QuickTaggerSettings, StarredTag } from "./main"
 import { ConfirmModal, QuickTagSelector } from './modal'
-import { getTagList, getTagsOnFiles } from './tag_gatherers'
+import { AddTagList, TagGatherer, TagsOnFiles } from './tag_gatherers'
 import { filterTag, getFilteredWithTag, getFilteredWithoutTag } from './file_filters'
 export { selectTag, addTagsWithModal, addTagWithModal, removeTagWithModal, removeTagsWithModal,
 	toggleTagOnActive, toggleTagOnFile, dynamicToggleCommand, dynamicAddMenuItems }
@@ -297,8 +297,8 @@ function _conformToArray(input:string | Array<string>){
  * @param notes notes that this action will affect
  * @returns promise for a tag (string) selected from the modal
  */
-async function selectTag(plugin: QuickTagPlugin, gatherer?: Function, notes?: TFile[]): Promise<string>{
-	let active_gatherer = gatherer ? gatherer : getTagList
+function selectTag(plugin: QuickTagPlugin, gatherer?: TagGatherer, notes?: TFile[]): Promise<string>{
+	let active_gatherer = gatherer ? gatherer : new AddTagList
 	let active_notes = notes ? notes : []
 	return new Promise((resolve) => {
 		new QuickTagSelector(plugin, active_gatherer, (result) => {resolve(result)}, active_notes).open();
@@ -363,7 +363,11 @@ function dynamicAddMenuItems(menu: Menu, files: TFile[], plugin: QuickTagPlugin)
 	let starredTags = plugin.settings.priorityTags
 
 	let singleFile = files.length == 1
-	let singleFileTags = singleFile ? getTagsOnFiles(plugin.settings, files) : []
+	let singleFileTags = [] as string[]
+	if (singleFile){
+		let tmp_gatherer = new TagsOnFiles
+		singleFileTags = tmp_gatherer.retrieve_tags(plugin, files)
+	}
 	let operation = singleFile ? toggleTagOnFile : addTagsDirectly
 
 	starredTags.forEach((t) => {
@@ -400,8 +404,10 @@ async function addDialogs(mode: string, tag: string, quantity?: number){
 	let confirm = true
 
 	if (tag == "REMOVE ALL"){
-		let msg = "This will delete all tags on the active note, are you sure?"
-		await adjust_tag_dialog(msg)
+		let msg = "This will delete all tags on the active note(s), are you sure?"
+		confirm = await adjust_tag_dialog(msg)
+		console.log("First responders")
+		console.log(confirm)
 		verb = ""
 	}
 	if (!confirm) {return confirm}
@@ -411,15 +417,19 @@ async function addDialogs(mode: string, tag: string, quantity?: number){
 					tag +
 					tofrom +
 					quantity + " notes, are you sure?"
-		await adjust_tag_dialog(msg)
+		confirm = await adjust_tag_dialog(msg)
+		console.log("second responders")
+		console.log(confirm)
 	}
 	return confirm
 }
 
 
 async function adjust_tag_dialog(msg: string){
-	let confirm = null
-	new ConfirmModal(this.app, (result) => (confirm = result), msg).open()
+	let confirm = false
+	await new Promise((resolve) => {
+		new ConfirmModal(this.app, (result) => (resolve(confirm = result)), msg).open()
+	})
 	return confirm
 }
 
@@ -433,7 +443,7 @@ async function adjust_tag_dialog(msg: string){
  * @param files 
  */
 async function addTagsWithModal(plugin: QuickTagPlugin, files: TFile[]){
-	let tag = await selectTag(plugin, getTagList, files)
+	let tag = await selectTag(plugin, new AddTagList, files)
 	addTagsDirectly(plugin, files, tag)
 }
 
@@ -453,8 +463,8 @@ async function addTagWithModal(plugin: QuickTagPlugin){
  * @param files 
  */
 async function removeTagsWithModal(plugin: QuickTagPlugin, files: TFile[]){
-	let tag = await selectTag(plugin, getTagsOnFiles, files)
-	removeTagsDirectly(plugin, files, tag)
+	let tag = await selectTag(plugin, new TagsOnFiles, files)
+	await removeTagsDirectly(plugin, files, tag)
 }
 
 
@@ -463,7 +473,7 @@ async function removeTagsWithModal(plugin: QuickTagPlugin, files: TFile[]){
  */
 async function removeTagWithModal(plugin: QuickTagPlugin){
 	let currentFile = _getActiveFile()
-	removeTagsWithModal(plugin, currentFile)
+	await removeTagsWithModal(plugin, currentFile)
 }
 
 
@@ -499,9 +509,12 @@ async function addTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tag: stri
 		return
 	}
 
-	let confirm = await addDialogs('add', tag, applicableFiles.length)
+	console.log("come now, let's pause")
+	let confirm = await addDialogs('add', tag, files.length)
+	console.log("Here's the cheese")
+	console.log(confirm)
 
-	if (confirm || applicableFiles.length == 1){
+	if (confirm){
 		update_last_used_tag(plugin, tag)
 		await _addTagToMany(applicableFiles, tag.replace('#', ''), plugin).then(
 			() => confirmationNotification('add', tag, applicableFiles)
@@ -537,7 +550,7 @@ async function removeTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tag: s
 
 	let confirm = await addDialogs('remove', tag, applicableFiles.length)
 
-	if (confirm || applicableFiles.length == 1){
+	if (confirm){
 		update_last_used_tag(plugin, tag)
 		await _removeTagFromMany(applicableFiles, tag.replace('#', ''), plugin).then(
 			() => confirmationNotification('remove', tag, applicableFiles)

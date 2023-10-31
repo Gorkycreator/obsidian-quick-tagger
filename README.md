@@ -43,15 +43,20 @@ This plugin does not keep track of changes in an undo/redo queue, please be awar
 - [x] Add command for starred tag
 - [x] Add button for starred tag in status bar
 - [x] Add right-click context menu option for starred tag
-- [ ] Tweak right-click behavior to toggle tags when tagging a single note
-- [ ] Permit adding new tag from tag selector
-- [ ] Repeat last tag command
+- [x] Tweak right-click behavior to toggle tags when tagging a single note
+- [x] Permit adding new tag from tag selector
+- [x] Toggle recently used tag command
 - [ ] Tag chains (cycle through a list of tags)
+- [ ] Dialog to add many tags to notes
+- [ ] Dialog to Convert tags to linklist items (and vice versa)^[For some reason I thought "linklist" was a more official term. Apparently I just picked it up from the example in the [1.4.0 release notes](https://obsidian.md/changelog/2023-07-26-desktop-v1.4.0/) and ran with it.]
 
 ## Manually install the plugin
 
 Copy `main.js` and `manifest.json` to your vault `VaultFolder/.obsidian/plugins/obsidian-quick-tagger/`.
 
+
+## Development notes
+The [official documentation on tags](https://help.obsidian.md/Editing+and+formatting/Tags#Tag+format) states only alphanumeric, underscores, hyphens, and forward sladshes are supported. I use lots of emojis in tags, which got me thinking and then testing thousands of unicode characters. The ones I found to be bad are included in the [constants file](https://github.com/Gorkycreator/obsidian-quick-tagger/blob/master/src/constants.ts). If you find invalid characters that make it through this filter, please open an issue or create a PR on the constants file.
 
 ## Special thanks to...
 - [Supercharged links](https://github.com/mdelobelle/obsidian_supercharged_links) and [Obsidian Variables](https://github.com/jffaust/obsidian-variables) for examples of adding and removing setting elements.

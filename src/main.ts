@@ -1,7 +1,7 @@
 import { Notice, Plugin, TFile, PluginSettingTab, Setting, Menu } from 'obsidian';
 import { dynamicToggleCommand, dynamicAddMenuItems, addTagsWithModal, addTagWithModal, toggleTagOnActive,
 	     selectTag, removeTagWithModal, removeTagsWithModal } from './utilities';
-import { getNonStarredTags } from './tag_gatherers';
+import { NonStarredTags } from './tag_gatherers';
 import { onlyTaggableFiles } from './file_filters';
 
 
@@ -21,6 +21,7 @@ export interface StarredTag {
  */
 export interface QuickTaggerSettings {
 	all_tags: boolean;
+	preffered_casing: string;
 	priorityTags: StarredTag[];
 	last_used_tag: string;
 }
@@ -30,6 +31,7 @@ export interface QuickTaggerSettings {
  */
 const DEFAULT_SETTINGS: QuickTaggerSettings = {
 	all_tags: true,
+	preffered_casing: 'None',
 	priorityTags: [],
 	last_used_tag: ''
 }
@@ -296,6 +298,21 @@ class QuickTagSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 			}));
 
+		new Setting(containerEl)
+			.setName('Preferred tag case')
+			.setDesc('Helper to replace spaces in input with a preffered tag style. "None" will just remove invalid characters.')
+			.addDropdown(dropdown => dropdown
+				.addOption('none', "None")
+				.addOption('camelcase', "applyCamelCase")
+				.addOption('pascalcase', "ApplyPascalCase")
+				.addOption('snakecase', "apply_snake_case")
+				.addOption('kebabcase', "apply-kebab-case")
+				.setValue(this.plugin.settings.preffered_casing)
+				.onChange(async (value) => {
+					this.plugin.settings.preffered_casing = value;
+					await this.plugin.saveSettings();
+			}));
+
 		containerEl.createEl('h1', { text: 'Starred tags' });
 		containerEl.createEl('h2', "hello")
 
@@ -306,7 +323,7 @@ class QuickTagSettingTab extends PluginSettingTab {
 		    .addButton(btn => btn
 			    .setTooltip("Add a starred tag")
 				.onClick(async () => {
-					let thisTag = await selectTag(this.plugin, getNonStarredTags)
+					let thisTag = await selectTag(this.plugin, new NonStarredTags)
 					
 					console.log("SETTING FUNCTION")
 					// console.log(selectedTag)
@@ -335,17 +352,17 @@ class QuickTagSettingTab extends PluginSettingTab {
 			btn.setTooltip(msg)
 		})
 		.addButton(btn => {btn.setIcon('chevron-right-square');
-			let msg = "The second toggle on a starred tag adds a command for it so you can create a hotkey, etc.  --- NOT IMPLEMENTED";
+			let msg = "The second toggle on a starred tag adds a command for it so you can create a hotkey, etc.";
 			btn.onClick(() => new Notice(msg,6000))
 			btn.setTooltip(msg)
 		})
 		.addButton(btn => {btn.setIcon('martini');
-			let msg = "The third toggle on a starred tag adds a button for it to the status bar.  --- NOT IMPLEMENTED";
+			let msg = "The third toggle on a starred tag adds a button for it to the status bar.";
 			btn.onClick(() => new Notice(msg,6000))
 			btn.setTooltip(msg)
 		})
 		.addButton(btn => {btn.setIcon('mouse-pointer-click');
-			let msg = "The fourth toggle on a starred tag adds it to the context menu.  --- NOT IMPLEMENTED";
+			let msg = "The fourth toggle on a starred tag adds it to the context menu.";
 			btn.onClick(() => new Notice(msg,6000))
 			btn.setTooltip(msg)
 		})

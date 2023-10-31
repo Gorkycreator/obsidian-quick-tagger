@@ -1,9 +1,7 @@
 // this file holds functions to filter the files based on tag and other criteria
 import { TFile, parseFrontMatterTags } from "obsidian"
 export { getFilteredWithTag, getFilteredWithoutTag, filterTag, onlyTaggableFiles }
-
-
-const SPECIAL_COMMANDS = ['REMOVE ALL']
+import { SPECIAL_COMMANDS } from "./constants"
 
 
 /** Filters array of files to only those that DO have the given tag

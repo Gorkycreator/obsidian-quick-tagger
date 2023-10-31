@@ -1,22 +1,18 @@
 // This file holds functions used to populate the tag selector modal
-import { QuickTaggerSettings, StarredTag } from "./main"
+import QuickTagPlugin, { QuickTaggerSettings, StarredTag } from "./main"
 import { TFile, parseFrontMatterTags } from "obsidian"
-export { getTagList, getTagsOnFiles, getNonStarredTags }
+export { AddTagList, TagsOnFiles, NonStarredTags, BaseGatherer }
 
 
 
 export interface TagGatherer {
-	_new_tag_permission: boolean
-	retrieve: (settings: QuickTaggerSettings, fileList?:TFile[], filter_key?:string) => string[]
+	retrieve_tags: (plugin: QuickTagPlugin, fileList?:TFile[], filter_key?:string) => string[]
+	get_new_tag_permission: () => boolean
 }
 
 
-class BaseGatherer implements TagGatherer {
+class BaseGatherer {
 	_new_tag_permission = true;
-
-	retrieve(settings:QuickTaggerSettings, fileList?:TFile[]) {
-		return ['pass']
-	}
 
 	enable_new_tag_permission(){
 		this._new_tag_permission = true
@@ -32,16 +28,17 @@ class BaseGatherer implements TagGatherer {
 }
 
 
-class TagList extends BaseGatherer {
-	_new_tag_permission = true;
-
-	retrieve(settings:QuickTaggerSettings, fileList?:TFile[]) {
-		let tagSettings = getStarredTags(settings, 'cut_in_line')
+/** Build a list of tags starting with configured starred tags. Used for adding tags to notes.
+ * If the option is set, add all tags in Obsidian to the list as well.
+ */
+class AddTagList extends BaseGatherer implements TagGatherer {
+	retrieve_tags(plugin:QuickTagPlugin, fileList?:TFile[]) {
+		let tagSettings = _getStarredTags(plugin.settings, 'cut_in_line')
 		let tag_array = tagSettings.map((e) => e.replace('#', ''))
 								.filter((e) => e)
 								.map((e) => '#' + e)
 		
-		if (!settings.all_tags){
+		if (!plugin.settings.all_tags){
 			return tag_array
 		}
 		
@@ -57,72 +54,60 @@ class TagList extends BaseGatherer {
 }
 
 
-/** Build a list of tags starting with configured starred tags. Used for adding tags to notes.
- * If the option is set, add all tags in Obsidian to the list as
- * well.
- * 
- * @param settings 
- * @param fileList
- * @returns string[] of tags
- */
-function getTagList(settings: QuickTaggerSettings, fileList?:TFile[]): string[]{
-	// TODO: add filtering to remove tags that are already on the active file?
-	let tagSettings = getStarredTags(settings, 'cut_in_line')
-	let tag_array = tagSettings.map((e) => e.replace('#', ''))
-	                           .filter((e) => e)
-							   .map((e) => '#' + e)
-	
-	if (!settings.all_tags){
-		return tag_array
-	}
-	
-    let tag_cache = getTagsFromAppCache()
-	tag_cache.sort()
-	tag_cache.forEach(tag => {
-		if (tag_array.indexOf(tag) == -1){
-			tag_array.push(tag)
-		}
-	})
-	return tag_array
-}
-
-
 /** Build a list of tags from the given files. Used for removing tags from notes.
  * 
- * @param settings 
- * @param fileList
- * @returns 
  */
-function getTagsOnFiles(settings: QuickTaggerSettings, fileList:TFile[]){
-	let tag_array = [] as string[]
-	fileList.forEach((f) =>{
-		let cache = this.app.metadataCache.getFileCache(f)
-		let new_tags = parseFrontMatterTags(cache.frontmatter)
-		if(new_tags){
-			new_tags.map((e) => e.replace('#', '')).filter((e) => e).map((e) => '#' + e)
-			new_tags.forEach((item) =>{
-				!tag_array.includes(item) ? tag_array.push(item) : undefined
-			})
+class TagsOnFiles extends BaseGatherer implements TagGatherer {
+	_new_tag_permission = false
+	tag_map: {[key: string]: number}
+	retrieve_tags(plugin: QuickTagPlugin, fileList:TFile[]){
+		let tag_array = [] as string[]
+		this.tag_map = {}
+		fileList.forEach((f) =>{
+			let cache = plugin.app.metadataCache.getFileCache(f)
+			if (cache){
+				let new_tags = parseFrontMatterTags(cache.frontmatter)
+				if(new_tags){
+					new_tags.map((e) => e.replace('#', '')).filter((e) => e).map((e) => '#' + e)
+					new_tags.forEach((item) =>{
+						if(!(item in this.tag_map)){
+							this.tag_map[item] = 0
+						}
+						this.tag_map[item] += 1
+						// !tag_array.includes(item) ? tag_array.push(item) : undefined
+					})
+				}
+			}
+		})
+		console.log(this.tag_map)
+		for(const item in this.tag_map){
+			console.log(item)
+			let quantity = this.tag_map[item]
+			if (quantity > 1){
+				tag_array.push(item + " (" + this.tag_map[item].toString() + " notes)")
+			} else {
+				tag_array.push(item)
+			}
+			
 		}
-	})
-	tag_array.push('REMOVE ALL')
-	return tag_array
-}
 
+		tag_array.push('REMOVE ALL')
+		return tag_array
+	}
+}
 
 /** Used for selecting new starred tags.
  * Build a list of tags in Obsidian _excluding_ starred tags. 
- * 
- * @param settings
- * @param fileList 
- * @returns 
  */
-function getNonStarredTags(settings: QuickTaggerSettings, fileList?:TFile[]){
-	let tag_array = getTagsFromAppCache()
-	let starredTags = getStarredTags(settings)
-	starredTags.forEach(t => tag_array.remove(t))
-	tag_array.sort()
-	return tag_array
+class NonStarredTags extends BaseGatherer implements TagGatherer {
+	_new_tag_permission = false
+	retrieve_tags(plugin: QuickTagPlugin){
+		let tag_array = getTagsFromAppCache()
+		let starredTags = _getStarredTags(plugin.settings)
+		starredTags.forEach(t => tag_array.remove(t))
+		tag_array.sort()
+		return tag_array
+	}
 }
 
 
@@ -132,7 +117,7 @@ function getNonStarredTags(settings: QuickTaggerSettings, fileList?:TFile[]){
  * @param filter a key of the StarredTag settings to filter only priority tags that are enabled.
  * @returns 
  */
-function getStarredTags(settings: QuickTaggerSettings, filter_key?:string){
+function _getStarredTags(settings: QuickTaggerSettings, filter_key?:string){
 	let results = [] as string[]
 	settings.priorityTags.forEach((t) => {
         if(filter_key){
