@@ -48,7 +48,9 @@ This plugin does not keep track of changes in an undo/redo queue, please be awar
 - [x] Toggle recently used tag command
 - [ ] Tag chains (cycle through a list of tags)
 - [ ] Dialog to add many tags to notes
-- [ ] Dialog to Convert tags to linklist items (and vice versa)^[For some reason I thought "linklist" was a more official term. Apparently I just picked it up from the example in the [1.4.0 release notes](https://obsidian.md/changelog/2023-07-26-desktop-v1.4.0/) and ran with it.]
+- [ ] Dialog to Convert tags to linklist items (and vice versa)[^1]
+
+[^1]: For some reason I thought "linklist" was a more official term. Apparently I just picked it up from the example in the [1.4.0 release notes](https://obsidian.md/changelog/2023-07-26-desktop-v1.4.0/) and ran with it.
 
 ## Manually install the plugin
 
