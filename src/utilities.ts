@@ -7,7 +7,7 @@ import { WOAH_LOTS_OF_FILES } from './constants'
 export { selectTag, addTagsWithModal, addTagWithModal, removeTagWithModal, removeTagsWithModal,
 	toggleTagOnActive, toggleTagOnFile, dynamicToggleCommand, dynamicAddMenuItems }
 export { _formatHashTag, _addFrontMatterTag, _cleanNoteContent, _getRemovalProcessor, 
-	_removeAllFrontMatterTags, _removeFrontMatterTag }
+	_removeAllFrontMatterTags, _removeFrontMatterTag, _conformToArray }
 
 const tag_key = 'tags'
 const tag_cleanup = ['tag', 'Tag', 'Tags']
@@ -281,11 +281,13 @@ function _collectExistingTags(yml:any){
  * @returns - the conformed array
  */
 function _conformToArray(input:string | Array<string>){
-	let output = typeof(input) === 'string' ? input.split(',').map(e => e.trim()) : input
-    if (output.length == 1){
-		// if we have one string, split it by spaces to confirm we don't have multiple tags
-		output = output[0].split(' ').map(e => e.trim())
-	}
+	let converted_array = typeof(input) === 'string' ? input.split(',').map(e => e.trim()) : input
+
+	// Obsidian counts spaces in tags as separate tags, this breaks them out into individual items
+	let separated_array: string[][] = []
+	converted_array.forEach((str) => separated_array.push(str.split(' ')))
+	let output = separated_array.flat(Infinity)
+	
 	return output ? output : []
 }
 

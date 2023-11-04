@@ -1,5 +1,5 @@
 import { _cleanNoteContent, _formatHashTag, _addFrontMatterTag, _getRemovalProcessor,
-         _removeAllFrontMatterTags, _removeFrontMatterTag } from "utilities"
+         _removeAllFrontMatterTags, _removeFrontMatterTag, _conformToArray } from "utilities"
 import { TFile } from "obsidian"
 
 test('removes leading newlines and trailing spaces from yaml header', () => {
@@ -17,6 +17,22 @@ This is a note.
     `)
 })
 
+test('given string, return array', () => {
+    expect(_conformToArray("a, b, c")).toBeInstanceOf(Array)
+})
+
+test('conforms comma-seperated strings to tag list', () => {
+    expect(_conformToArray("a, b, c")).toEqual(['a', 'b', 'c'])
+})
+
+test('conforms space-seperated strings to tag list', () => {
+    expect(_conformToArray("a b c")).toEqual(['a', 'b', 'c'])
+})
+
+test('splits spaces in tags into separate tags', () => {
+    expect(_conformToArray(["a", "b c"])).toEqual(['a', 'b', 'c'])
+})
+
 
 // Test _formatHashTag
 test('remove hashtag character from tag', () => {
@@ -29,7 +45,6 @@ test("don't botch non-hashtag tags", () => {
 
 
 
-// Test _addFrontMatterTag
 let mock_yaml = {"tags": ['#no'], "aliases": 'yes'} // hashtags should be removed
 let fixed_mock_yaml = {"tags": ['no', 'hello'], 'aliases': 'yes'}
 
@@ -45,6 +60,7 @@ class TestFrontmatterTag{
     }
 }
 
+// Test _addFrontMatterTag
 test('test after adding a tag', () => {
     let execution = new TestFrontmatterTag('hello', _addFrontMatterTag);
     execution.run()(mock_yaml);
