@@ -333,7 +333,7 @@ function confirmationNotification(mode:string, tag:string, applicableFiles: TFil
 function dynamicToggleCommand(plugin: QuickTagPlugin, StarredTag: StarredTag){
 	let tag = StarredTag.tag_value.replace('#', '')
 	let commandId = `quick-add-tag:${tag}`
-	let fullId = `obsidian-quick-tagger:${commandId}`
+	let fullId = `quick-tagger:${commandId}`
 	let state = false
 
 	if(plugin.app.commands.findCommand(fullId)) {
