@@ -408,8 +408,6 @@ async function addDialogs(mode: string, tag: string, quantity?: number){
 	if (tag == "REMOVE ALL"){
 		let msg = "This will delete all tags on the active note(s), are you sure?"
 		confirm = await adjust_tag_dialog(msg)
-		console.log("First responders")
-		console.log(confirm)
 		verb = ""
 	}
 	if (!confirm) {return confirm}
@@ -420,8 +418,6 @@ async function addDialogs(mode: string, tag: string, quantity?: number){
 					tofrom +
 					quantity + " notes, are you sure?"
 		confirm = await adjust_tag_dialog(msg)
-		console.log("second responders")
-		console.log(confirm)
 	}
 	return confirm
 }
@@ -511,10 +507,7 @@ async function addTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tag: stri
 		return
 	}
 
-	console.log("come now, let's pause")
 	let confirm = await addDialogs('add', tag, files.length)
-	console.log("Here's the cheese")
-	console.log(confirm)
 
 	if (confirm){
 		update_last_used_tag(plugin, tag)
