@@ -1,7 +1,12 @@
 import QuickTagPlugin from "main"
 import { KNOWN_BAD_CHARACTERS } from "./constants"
 
-const modifier_map = {
+
+interface ModMap {
+    [key: string]: null | Function
+}
+
+const modifier_map: ModMap = {
     'none': null,
     'camelcase': camelCase,
     'pascalcase': titleCase,
@@ -14,7 +19,7 @@ export function prep_clean_query(original_query: string, plugin: QuickTagPlugin)
     let fixed_query = original_query
 
     let setting_value: string = plugin.settings.preffered_casing
-    let modifier_func = modifier_map[setting_value]
+    let modifier_func = modifier_map[setting_value as string]
 
     if (modifier_func){
         fixed_query = modifier_func(fixed_query)

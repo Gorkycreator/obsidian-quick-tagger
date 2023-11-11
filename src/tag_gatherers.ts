@@ -79,9 +79,8 @@ class TagsOnFiles extends BaseGatherer implements TagGatherer {
 				}
 			}
 		})
-		console.log(this.tag_map)
+		
 		for(const item in this.tag_map){
-			console.log(item)
 			let quantity = this.tag_map[item]
 			if (quantity > 1){
 				tag_array.push(item + " (" + this.tag_map[item].toString() + " notes)")

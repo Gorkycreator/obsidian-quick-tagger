@@ -325,8 +325,6 @@ class QuickTagSettingTab extends PluginSettingTab {
 				.onClick(async () => {
 					let thisTag = await selectTag(this.plugin, new NonStarredTags)
 					
-					console.log("SETTING FUNCTION")
-					// console.log(selectedTag)
 					this.plugin.settings.priorityTags.push({
 						tag_value: thisTag,
 						cut_in_line: true,
