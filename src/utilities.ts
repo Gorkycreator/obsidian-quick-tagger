@@ -160,8 +160,8 @@ async function _removeTagFromMany(files:TFile[], tag:string, plugin: QuickTagPlu
  * @param func 
  */
 async function _apply_bulk_changes(files:TFile[], tag:string, plugin:QuickTagPlugin, func:Function){
-	let logger = plugin.addStatusBarItem();
-	logger.createEl("span")
+	let status_bar = plugin.addStatusBarItem();
+	status_bar.createEl("span")
 	let useStatusBar = false
 
 	if (files.length > WOAH_LOTS_OF_FILES){
@@ -170,12 +170,12 @@ async function _apply_bulk_changes(files:TFile[], tag:string, plugin:QuickTagPlu
 	}
 	for (let i=0; i<files.length; i++){
 		if(useStatusBar){
-			logger.setText(`Processing ${tag}: ${i + 1}/${files.length}`)
+			status_bar.setText(`Processing ${tag}: ${i + 1}/${files.length}`)
 		}
 		await func(files[i], tag)
 	}
 
-	logger.remove()
+	status_bar.remove()
 }
 
 
@@ -333,7 +333,7 @@ function confirmationNotification(mode:string, tag:string, applicableFiles: TFil
 function dynamicToggleCommand(plugin: QuickTagPlugin, StarredTag: StarredTag){
 	let tag = StarredTag.tag_value.replace('#', '')
 	let commandId = `quick-add-tag:${tag}`
-	let fullId = `obsidian-quick-tagger:${commandId}`
+	let fullId = `quick-tagger:${commandId}`
 	let state = false
 
 	if(plugin.app.commands.findCommand(fullId)) {

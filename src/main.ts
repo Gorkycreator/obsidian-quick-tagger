@@ -59,11 +59,11 @@ export default class QuickTagPlugin extends Plugin {
 		this.redrawButtons()
 
 		// Ribbon Icons
-		const addTagRibbonIcon = this.addRibbonIcon('tag', 'Add Tag to Current Note', async (evt: MouseEvent) => {
+		const addTagRibbonIcon = this.addRibbonIcon('tag', 'Add tag to current note', async (evt: MouseEvent) => {
 			addTagWithModal(this)
 		});
 
-		const removeTagRibbonIcon = this.addRibbonIcon('x-square', 'Remove Tag from Current Note', (evt: MouseEvent) => {
+		const removeTagRibbonIcon = this.addRibbonIcon('x-square', 'Remove tag from current note', (evt: MouseEvent) => {
 			removeTagWithModal(this)
 		});
 
@@ -438,7 +438,7 @@ class QuickTagSettingTab extends PluginSettingTab {
 							this.plugin.redrawButtons()
 						})
 						button.setIcon("up-arrow-with-tail");
-						button.setTooltip("Move Starred Tag up")
+						button.setTooltip("Move Starred tag up")
 						if (i === 0){
 							button.setDisabled(true);
 						}
@@ -453,7 +453,7 @@ class QuickTagSettingTab extends PluginSettingTab {
 							this.plugin.redrawButtons()
 						})
 						button.setIcon("down-arrow-with-tail");
-						button.setTooltip("Move Starred Tag down")
+						button.setTooltip("Move Starred tag down")
 						if (i === priorityTags.length - 1){
 							button.setDisabled(true);
 						}
@@ -465,9 +465,9 @@ class QuickTagSettingTab extends PluginSettingTab {
 							this.drawPriorityTags(div)
 						})
 						btn.setIcon("trash")
-						btn.setTooltip("Remove this Tag")
+						btn.setTooltip("Remove this tag")
 					});
-				s.nameEl.innerHTML = tag.tag_value
+				s.nameEl.createEl('div', { text: tag.tag_value })
 		})
 	}
 }
