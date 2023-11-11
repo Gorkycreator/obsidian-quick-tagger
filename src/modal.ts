@@ -91,12 +91,7 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
     }
 
     async onChooseItem(result: string) {
-        console.log(result)
-        console.log(SPECIAL_COMMANDS)
-        console.log(SPECIAL_COMMANDS.includes(result))
         let cleaned_tag = SPECIAL_COMMANDS.includes(result) ? result : result.split(' ')[0]
-        console.log("the cleaned tag is")
-        console.log(cleaned_tag)
         this.onChooseItemCallback(cleaned_tag)
     }
 }
