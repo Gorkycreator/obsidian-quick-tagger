@@ -50,23 +50,31 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
     }
 
     override getSuggestions(query: string): FuzzyMatch<string>[] {
-        let cleaned_query = prep_clean_query(query, this.plugin)  // TODO: make the settings determine this
+        let cleaned_query = prep_clean_query(query, this.plugin)
 
         let search = prepareFuzzySearch(cleaned_query)
         
         let options = this.getItems()
-        if(this.new_tags_enabled) {
-            if (!/^[0-9]+$/.test(cleaned_query)){  // pure numeric entries are not valid tags
-                options = options.concat(["#" + cleaned_query + " (new tag)"])
-            }
-        }
+        let cleaned_options: string[] = []  // we want to maintain case sensitivity for options, so make a new list
+        options.forEach((opt) => cleaned_options.push(opt.toLowerCase().replace("#", '')))
         
         let result: FuzzyMatch<string>[] = []
 
-        for (const item in options){
-            const match = search(options[item])
+        for (const indx in options){
+            const match = search(options[indx])
             if (match){
-                result.push({'item': options[item], 'match': match})
+                
+                result.push({'item': options[indx], 'match': match})
+            }
+        }
+        
+        result.sort((a: FuzzyMatch<string>, b: FuzzyMatch<string>) => b.match.score - a.match.score)
+        
+        // New entry is added last so that it is not sorted.
+        if(this.new_tags_enabled && !cleaned_options.includes(cleaned_query.toLowerCase())) {
+            const match = search(cleaned_query)  // this isn't really needed, just make it so TypeScript doesn't get mad at us.
+            if (!/^[0-9]+$/.test(cleaned_query) && match) {  // pure numeric entries are not valid tags.
+                result.push({'item': "#" + cleaned_query + " (new tag)", 'match': match})
             }
         }
 
@@ -80,6 +88,7 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
         }
 
         if(this.tagCache.length == 0){
+            // only gather tags when this is initially created
             this.tagCache = this.gatherer(this, this.fileList)
         }
         
