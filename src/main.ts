@@ -1,6 +1,6 @@
 import { Notice, Plugin, TFile, PluginSettingTab, Setting, Menu } from 'obsidian';
 import { dynamicToggleCommand, dynamicAddMenuItems, addTagsWithModal, addTagWithModal, toggleTagOnActive,
-	     selectTag, removeTagWithModal, removeTagsWithModal } from './utilities';
+	     selectTag, removeTagWithModal, removeTagsWithModal, constructTaggerContextMenu } from './utilities';
 import { NonStarredTags } from './tag_gatherers';
 import { onlyTaggableFiles } from './file_filters';
 
@@ -93,127 +93,54 @@ export default class QuickTagPlugin extends Plugin {
 			}
 		})
 
-		// File Context menu commands
-		this.registerEvent(
+		// Menu commands
+		this.registerEvent(  // context menu when multiple items are selected in the file browser
 			this.app.workspace.on("files-menu", (menu: Menu, files: TFile[]) => {
 				files = onlyTaggableFiles(files)
 				if(files.length < 1){return}
-				menu.addItem((item) =>{
-					item
-					  .setTitle("Tag " + files.length + " files with...")
-					  .setIcon("tag")
-					  .onClick(() => {
-						addTagsWithModal(this, files)
-					  })
-				})
+				constructTaggerContextMenu(menu, files, this)
+
+				
 			})
 		)
-
-		this.registerEvent(
-			this.app.workspace.on('files-menu', (menu: Menu, files: TFile[]) => {
-				if(files.length < 1){return}
-				dynamicAddMenuItems(menu, files, this)
-			})
-		)
-
-		this.registerEvent(
-			this.app.workspace.on("files-menu", (menu: Menu, files: TFile[]) => {
-				files = onlyTaggableFiles(files)
-				if(files.length < 1){return}
-				menu.addItem((item) =>{
-					item
-					  .setTitle("Remove Tag from " + files.length + " files...")
-					  .setIcon("tag")
-					  .onClick(() => {
-						removeTagsWithModal(this, files)
-					  })
-				})
-			})
-		)
-
-		this.registerEvent(
+		
+		this.registerEvent(  // context menu when right clicking on a file (file browser, active tab header, )
 			this.app.workspace.on("file-menu", (menu: Menu, file: TFile) => {
-				let thisFile = onlyTaggableFiles([file])
-				if(thisFile.length < 1){return}
-				menu.addItem((item) =>{
-					item
-					  .setTitle("Tag file with...")
-					  .setIcon("tag")
-					  .onClick(() => {
-						addTagsWithModal(this, thisFile)
-					  })
-				})
+				let files = onlyTaggableFiles([file])
+				if(files.length < 1){return}
+				constructTaggerContextMenu(menu, files, this)
 			})
 		)
 
-		this.registerEvent(
-			this.app.workspace.on('file-menu', (menu: Menu, file: TFile) => {
-				let thisFile = onlyTaggableFiles([file])
-				if(thisFile.length < 1){return}
-				dynamicAddMenuItems(menu, thisFile, this)
-			})
-		)
-
-		this.registerEvent(
-			this.app.workspace.on("file-menu", (menu: Menu, file: TFile) => {
-				let thisFile = onlyTaggableFiles([file])
-				if(thisFile.length < 1){return}
-				menu.addItem((item) =>{
-					item
-					  .setTitle("Remove Tag(s)...")
-					  .setIcon("tag")
-					  .onClick(() => {
-						removeTagsWithModal(this, thisFile)
-					  })
-				})
-			})
-		)
-
-		// Search Results menu commands
-		this.registerEvent(
+		this.registerEvent(  // ... menu in search results window
 			this.app.workspace.on("search:results-menu", (menu: Menu, leaf: any) => {
 				let files = [] as TFile[]
 				leaf.dom.vChildren.children.forEach((e: any) => files.push(e.file))  // TODO: there must be a better way to do this!
 				files = onlyTaggableFiles(files)
 				if(files.length < 1){return}
+				constructTaggerContextMenu(menu, files, this)
+			})
+		)
 
-				menu.addItem((item) =>{
+		this.registerEvent(  // context menu when right-clicking content in edit mode.
+			this.app.workspace.on('editor-menu', (menu: Menu, leaf: any) => {
+				// TODO: figure out how to get files from the selection.
+				// TODO: de-duplicate menu entries when right clicking on a link in edit mode.
+				menu.addItem((item) => {
 					item
-					  .setTitle("Add Tag to " + files.length + " notes...")
+					  .setTitle("testing")
 					  .setIcon("tag")
-					  .onClick(() => {
-						addTagsWithModal(this, files)
-					  })
 				})
 			})
 		)
 
-		this.registerEvent(
-			this.app.workspace.on("search:results-menu", (menu: Menu, leaf: any) => {
+		this.registerEvent(  // `v` menu in the tab header
+			this.app.workspace.on('tab-group-menu', (menu: Menu, group: any) => {
+				console.log(Object.getPrototypeOf(group.children[0].view.file))
 				let files = [] as TFile[]
-				leaf.dom.vChildren.children.forEach((e: any) => files.push(e.file))  // TODO: there must be a better way to do this, too
+				group.children.forEach((tab: any) => files.push(tab.view.file))
 				files = onlyTaggableFiles(files)
-				if(files.length < 1){return}
-
-				dynamicAddMenuItems(menu, files, this)
-			})
-		)
-
-		this.registerEvent(
-			this.app.workspace.on("search:results-menu", (menu: Menu, leaf: any) => {
-				let files = [] as TFile[]
-				leaf.dom.vChildren.children.forEach((e: any) => files.push(e.file))  // TODO: there must be a better way to do this, really.
-				files = onlyTaggableFiles(files)
-				if(files.length < 1){return}
-				
-				menu.addItem((item) =>{
-					item
-					  .setTitle("Remove Tags from " + files.length + " notes...")
-					  .setIcon("tag")
-					  .onClick(() => {						
-						removeTagsWithModal(this, files)
-					  })
-				})
+				constructTaggerContextMenu(menu, files, this)
 			})
 		)
 

@@ -30,6 +30,10 @@ export function prep_clean_query(original_query: string, plugin: QuickTagPlugin)
         fixed_query = fixed_query.replaceAll(KNOWN_BAD_CHARACTERS[index], '')
     }
 
+    // forward-slash characters are for tag hierarchy, they cannot be consecutive
+    const slash_regex = /\/{2,}/gi
+    fixed_query = fixed_query.replace(slash_regex, "/")
+
     return fixed_query
 }
 

@@ -5,7 +5,7 @@ import { AddTagList, TagGatherer, TagsOnFiles } from './tag_gatherers'
 import { filterTag, getFilteredWithTag, getFilteredWithoutTag } from './file_filters'
 import { WOAH_LOTS_OF_FILES } from './constants'
 export { selectTag, addTagsWithModal, addTagWithModal, removeTagWithModal, removeTagsWithModal,
-	toggleTagOnActive, toggleTagOnFile, dynamicToggleCommand, dynamicAddMenuItems }
+	toggleTagOnActive, toggleTagOnFile, dynamicToggleCommand, dynamicAddMenuItems, constructTaggerContextMenu }
 export { _formatHashTag, _addFrontMatterTag, _cleanNoteContent, _getRemovalProcessor, 
 	_removeAllFrontMatterTags, _removeFrontMatterTag, _conformToArray }
 
@@ -355,6 +355,38 @@ function dynamicToggleCommand(plugin: QuickTagPlugin, StarredTag: StarredTag){
 }
 
 
+/** Add context menu items to a given menu
+ * 
+ */
+function constructTaggerContextMenu(menu: Menu, files: TFile[], plugin: QuickTagPlugin){
+	menu.addItem((item) => {
+		let subMenu = item
+		  .setTitle("Quick Tag")
+		  .setIcon("tag")
+		  .setSubmenu()
+		subMenu
+		  .addItem((item) =>{
+			item
+			.setTitle("Tag " + files.length + " file(s) with...")
+			.setIcon("plus")
+			.onClick(() => {
+				addTagsWithModal(plugin, files)
+			})
+		  })
+		dynamicAddMenuItems(subMenu, files, plugin)
+		subMenu.addItem((item) =>{
+			item
+			  .setTitle("Remove Tag from " + files.length + " file(s)...")
+			  .setIcon("minus")
+			  .onClick(() => {
+				removeTagsWithModal(plugin, files)
+			  })
+		})
+	})
+}
+
+
+
 /** Add menu items for configured starred tags
  * 
  * @param menu 
@@ -382,7 +414,7 @@ function dynamicAddMenuItems(menu: Menu, files: TFile[], plugin: QuickTagPlugin)
 				}
 				item
 				  .setTitle(title)
-				  .setIcon("tag")
+				  .setIcon("star")
 				  .onClick(async () => {
 					operation(plugin, files, t.tag_value)
 				  })

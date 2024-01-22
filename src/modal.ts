@@ -73,7 +73,7 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
         // New entry is added last so that it is not sorted.
         if(this.new_tags_enabled && !cleaned_options.includes(cleaned_query.toLowerCase())) {
             const match = search(cleaned_query)  // this isn't really needed, just make it so TypeScript doesn't get mad at us.
-            if (!/^[0-9]+$/.test(cleaned_query) && match) {  // pure numeric entries are not valid tags.
+            if (!/^[0-9]+$/.test(cleaned_query) && !/^\/+$/.test(cleaned_query) && match) {  // pure numeric entries are not valid tags.
                 result.push({'item': "#" + cleaned_query + " (new tag)", 'match': match})
             }
         }
