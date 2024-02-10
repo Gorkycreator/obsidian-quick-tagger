@@ -1,6 +1,7 @@
-import { Notice, Plugin, TFile, PluginSettingTab, Setting, Menu } from 'obsidian';
-import { dynamicToggleCommand, dynamicAddMenuItems, addTagsWithModal, addTagWithModal, toggleTagOnActive,
-	     selectTag, removeTagWithModal, removeTagsWithModal, constructTaggerContextMenu } from './utilities';
+import { Notice, Plugin, TFile, PluginSettingTab, Setting, Menu, setIcon, MenuItem } from 'obsidian';
+import { dynamicToggleCommand, addTagWithModal, toggleTagOnActive,
+	     selectTag, removeTagWithModal, constructTaggerContextMenu,
+		 showStatusBarMenu } from './utilities';
 import { NonStarredTags } from './tag_gatherers';
 import { onlyTaggableFiles } from './file_filters';
 
@@ -23,6 +24,7 @@ export interface QuickTaggerSettings {
 	all_tags: boolean;
 	preffered_casing: string;
 	priorityTags: StarredTag[];
+	statusBarCount: number;
 	last_used_tag: string;
 }
 
@@ -33,16 +35,18 @@ const DEFAULT_SETTINGS: QuickTaggerSettings = {
 	all_tags: true,
 	preffered_casing: 'None',
 	priorityTags: [],
+	statusBarCount: 3,
 	last_used_tag: ''
 }
-
 
 /** Main class for plugin
  * 
  */
 export default class QuickTagPlugin extends Plugin {
 	settings: QuickTaggerSettings;
-	_statusBarItem: HTMLElement[]
+	_statusBarItem: HTMLElement
+	_statusBarItemMenu: Menu
+	_statusBarStarredTags: HTMLElement[]
 
 	async onload() {
 		await this.loadSettings();
@@ -55,8 +59,10 @@ export default class QuickTagPlugin extends Plugin {
 			}
 		})
 
-		this._statusBarItem = new Array
-		this.redrawButtons()
+		this.setupStatusBar();
+
+		this._statusBarStarredTags = new Array
+		this.redrawStatusBar()
 
 		// Ribbon Icons
 		const addTagRibbonIcon = this.addRibbonIcon('tag', 'Add tag to current note', async (evt: MouseEvent) => {
@@ -115,7 +121,7 @@ export default class QuickTagPlugin extends Plugin {
 		this.registerEvent(  // ... menu in search results window
 			this.app.workspace.on("search:results-menu", (menu: Menu, leaf: any) => {
 				let files = [] as TFile[]
-				leaf.dom.vChildren.children.forEach((e: any) => files.push(e.file))  // TODO: there must be a better way to do this!
+				leaf.dom.vChildren.children.map((e: any) => e.file)  // TODO: there must be a better way to do this!
 				files = onlyTaggableFiles(files)
 				if(files.length < 1){return}
 				constructTaggerContextMenu(menu, files, this)
@@ -136,7 +142,6 @@ export default class QuickTagPlugin extends Plugin {
 
 		this.registerEvent(  // `v` menu in the tab header
 			this.app.workspace.on('tab-group-menu', (menu: Menu, group: any) => {
-				console.log(Object.getPrototypeOf(group.children[0].view.file))
 				let files = [] as TFile[]
 				group.children.forEach((tab: any) => files.push(tab.view.file))
 				files = onlyTaggableFiles(files)
@@ -170,26 +175,43 @@ export default class QuickTagPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	redrawButtons(){
-		if (this._statusBarItem) {
-			this._statusBarItem.forEach((t) => t.remove())
+	setupStatusBar() {
+		this._statusBarItem = this.addStatusBarItem()
+		this._statusBarItem.classList.add("mod-clickable")
+		this._statusBarItem.setAttribute('aria-label', 'Click for quick tagging options')
+		this._statusBarItem.setAttribute('data-tooltip-position', 'top')
+		setIcon(this._statusBarItem, 'tags')
+
+		this.registerDomEvent(this._statusBarItem, "click", () => showStatusBarMenu(this));
+	}
+
+	redrawStatusBar(){
+		if (this._statusBarStarredTags) {
+			this._statusBarStarredTags.forEach((t) => t.remove())
 		}
-		
+
 		let starredTags = this.settings.priorityTags
-		starredTags.forEach((t) => {
+		let buffer = this.settings.statusBarCount
+
+		// Set up limited number of starred tag buttons
+		for (let i = 0; i < starredTags.length; i++){
+			let t = starredTags[i]
 			if (t.status_bar){
+				if (buffer < 1){
+					continue
+				}
 				let item_to_add = this.addStatusBarItem()
-				this._statusBarItem.push(item_to_add)
+				this._statusBarStarredTags.push(item_to_add)
 				item_to_add.classList.add("mod-clickable")
 				item_to_add.setText(t.tag_value)
-				item_to_add.setAttribute("aria-label", `Toggle #${t.tag_value} on active note`);
-				item_to_add.setAttribute("aria-label-position", "top");
+				item_to_add.setAttribute("aria-label", `Toggle ${t.tag_value} on active note`);
+				item_to_add.setAttribute("data-tooltip-position", "top");
 				item_to_add.addEventListener("click", async () => {
 					toggleTagOnActive(this, t.tag_value)
 				});
+				buffer--
 			}
 		}
-		)
 	}
 }
 
@@ -240,8 +262,22 @@ class QuickTagSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 			}));
 
+		new Setting(containerEl)
+			.setName('How many tags to show on the status bar')
+			.setDesc('Controls how many starred tags will be shown directly on the status bar. Others will be placed in a pop-up menu.')
+			.addSlider((component) => {
+				component.onChange(async (value) => {
+					this.plugin.settings.statusBarCount = value
+					await this.plugin.saveSettings();
+					this.plugin.redrawStatusBar();
+				})
+				.setLimits(0, 20, 1)
+				.setValue(this.plugin.settings.statusBarCount)
+				.setDynamicTooltip()
+			})
+
+
 		containerEl.createEl('h1', { text: 'Starred tags' });
-		containerEl.createEl('h2', "hello")
 
 		const starredDiv = containerEl.createDiv();
 		this.drawPriorityTags(starredDiv);
@@ -339,7 +375,7 @@ class QuickTagSettingTab extends PluginSettingTab {
 							tag.status_bar = value;
 							await this.plugin.saveSettings();
 							new Notice(tag.status_bar ? `Added ${tag.tag_value} button to status bar` : `Removed ${tag.tag_value} button from status bar`)
-							this.plugin.redrawButtons()
+							this.plugin.redrawStatusBar()
 						});
 						toggle.setTooltip("Add button to status bar")
 					})
@@ -360,7 +396,7 @@ class QuickTagSettingTab extends PluginSettingTab {
 							priorityTags[i] = oldTag;
 							this.drawPriorityTags(div);
 							await this.plugin.saveSettings();
-							this.plugin.redrawButtons()
+							this.plugin.redrawStatusBar()
 						})
 						button.setIcon("up-arrow-with-tail");
 						button.setTooltip("Move Starred tag up")
@@ -375,7 +411,7 @@ class QuickTagSettingTab extends PluginSettingTab {
 							priorityTags[i] = oldTag;
 							this.drawPriorityTags(div);
 							await this.plugin.saveSettings();
-							this.plugin.redrawButtons()
+							this.plugin.redrawStatusBar()
 						})
 						button.setIcon("down-arrow-with-tail");
 						button.setTooltip("Move Starred tag down")

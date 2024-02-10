@@ -1,5 +1,5 @@
-import{ Notice, App, TFile, Menu } from 'obsidian'
-import QuickTagPlugin, { StarredTag } from "./main"
+import{ Notice, App, TFile, Menu, Component } from 'obsidian'
+import QuickTagPlugin, { QuickTaggerSettings, StarredTag } from "./main"
 import { ConfirmModal, QuickTagSelector } from './modal'
 import { AddTagList, TagGatherer, TagsOnFiles } from './tag_gatherers'
 import { filterTag, getFilteredWithTag, getFilteredWithoutTag } from './file_filters'
@@ -7,7 +7,7 @@ import { WOAH_LOTS_OF_FILES } from './constants'
 export { selectTag, addTagsWithModal, addTagWithModal, removeTagWithModal, removeTagsWithModal,
 	toggleTagOnActive, toggleTagOnFile, dynamicToggleCommand, dynamicAddMenuItems, constructTaggerContextMenu }
 export { _formatHashTag, _addFrontMatterTag, _cleanNoteContent, _getRemovalProcessor, 
-	_removeAllFrontMatterTags, _removeFrontMatterTag, _conformToArray }
+	_removeAllFrontMatterTags, _removeFrontMatterTag, _conformToArray, showStatusBarMenu }
 
 const tag_key = 'tags'
 const tag_cleanup = ['tag', 'Tag', 'Tags']
@@ -176,6 +176,112 @@ async function _apply_bulk_changes(files:TFile[], tag:string, plugin:QuickTagPlu
 	}
 
 	status_bar.remove()
+}
+
+
+async function showStatusBarMenu(plugin:QuickTagPlugin){
+	let statusBarRect = plugin._statusBarItem.parentElement?.getBoundingClientRect()
+	let statusBarIconRect = plugin._statusBarItem.getBoundingClientRect()
+	let current_file = plugin.app.workspace.getActiveFile()
+
+
+	plugin._statusBarItemMenu = new Menu()
+
+	plugin._statusBarItemMenu.addItem((item) => {
+		item
+		  .setTitle("On active file...")
+		  .setIsLabel(true)
+	})
+	plugin._statusBarItemMenu.addSeparator()
+
+	if (current_file) {
+		populateStatusBarMenuItems([current_file], plugin)
+	}
+	
+	populateStatusBarTagStashIndicator(plugin._statusBarItemMenu, plugin.settings)
+	
+
+	let centerRect = (statusBarIconRect.left - statusBarIconRect.right) / 2 + statusBarIconRect.left
+	plugin._statusBarItemMenu.showAtPosition({
+		x: centerRect,
+		y: statusBarRect.top - 5,
+
+	})
+}
+
+
+function wordWrap(str: string, max: number, br: string = '\n'){
+	// https://www.30secondsofcode.org/js/s/word-wrap/
+	return str.replace(new RegExp(`(?![^\\n]{1,${max}}$)([^\\n]{1,${max}})\\s`, 'g'), '$1' + br);
+}
+
+async function populateStatusBarMenuItems(files:TFile[], plugin: QuickTagPlugin){
+	plugin._statusBarItemMenu
+		.addItem((item) =>{
+		item
+		.setTitle("Add tag")
+		.setIcon("plus")
+		.onClick(() => {
+			addTagsWithModal(plugin, files)
+		})
+	})
+
+	let starredTags = plugin.settings.priorityTags
+
+	let singleFile = files.length == 1
+	let singleFileTags = [] as string[]
+	if (singleFile){
+		let tmp_gatherer = new TagsOnFiles
+		singleFileTags = tmp_gatherer.retrieve_tags(plugin, files)
+	}
+	let operation = singleFile ? toggleTagOnFile : addTagsDirectly
+
+	let buffer = plugin.settings.statusBarCount
+	for (let i = 0; i < starredTags.length; i++){
+		let t = starredTags[i]
+		if(t.status_bar){
+			if (buffer > 0){
+				buffer--
+				continue
+			}
+			plugin._statusBarItemMenu.addItem((item) =>{
+				let title = `${t.tag_value}`
+				let icon = 'plus'
+				if (singleFile){
+					let state = singleFileTags.includes(t.tag_value)
+					icon = state ? 'minus' : 'plus'
+				}
+				item
+				  .setTitle(title)
+				  .setIcon(icon)
+				  .onClick(async () => {
+					operation(plugin, files, t.tag_value)
+				  })
+			})
+		}
+	}
+
+	plugin._statusBarItemMenu.addItem((item) =>{
+		item
+			.setTitle("Remove tag")
+			.setIcon("minus")
+			.onClick(() => {
+			removeTagsWithModal(plugin, files)
+			})
+	})
+
+}
+
+
+async function populateStatusBarTagStashIndicator(menu: Menu, settings: QuickTaggerSettings){
+	menu.addSeparator()
+	menu.addItem((item) => {
+
+		// TODO: this needs to actually find the stashed tags, not the starred tags (that was used for testing)
+		let stashed_text = "Stashed tags:\n" + settings.priorityTags.map((e) => e.tag_value).join(", ")
+		stashed_text = wordWrap(stashed_text, 25, "\n ")
+		item.setTitle(stashed_text).setIsLabel(true)
+	})
 }
 
 
@@ -358,12 +464,14 @@ function dynamicToggleCommand(plugin: QuickTagPlugin, StarredTag: StarredTag){
 /** Add context menu items to a given menu
  * 
  */
-function constructTaggerContextMenu(menu: Menu, files: TFile[], plugin: QuickTagPlugin){
+function constructTaggerContextMenu(menu: Menu, files: TFile[], plugin: QuickTagPlugin, section="action"){
 	menu.addItem((item) => {
 		let subMenu = item
 		  .setTitle("Quick Tag")
 		  .setIcon("tag")
+		  .setSection(section)
 		  .setSubmenu()
+		
 		subMenu
 		  .addItem((item) =>{
 			item
@@ -373,7 +481,9 @@ function constructTaggerContextMenu(menu: Menu, files: TFile[], plugin: QuickTag
 				addTagsWithModal(plugin, files)
 			})
 		  })
+		
 		dynamicAddMenuItems(subMenu, files, plugin)
+
 		subMenu.addItem((item) =>{
 			item
 			  .setTitle("Remove Tag from " + files.length + " file(s)...")
