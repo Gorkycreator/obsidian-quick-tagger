@@ -4,6 +4,7 @@ import { dynamicToggleCommand, addTagWithModal, toggleTagOnActive,
 		 showStatusBarMenu } from './utilities';
 import { NonStarredTags } from './tag_gatherers';
 import { onlyTaggableFiles } from './file_filters';
+import { set_up_stashed_tags } from './tag_stash';
 
 
 /** interface for starred tag settings
@@ -17,6 +18,11 @@ export interface StarredTag {
 	right_click: boolean;
 }
 
+export interface SavedStash {
+	name: string
+	tags: string[]
+}
+
 /** interface for plugin settings as a whole
  * 
  */
@@ -26,6 +32,8 @@ export interface QuickTaggerSettings {
 	priorityTags: StarredTag[];
 	statusBarCount: number;
 	last_used_tag: string;
+	tag_stash: string[];
+	saved_stashes: SavedStash[];
 }
 
 /** default settings for when none exist
@@ -36,7 +44,9 @@ const DEFAULT_SETTINGS: QuickTaggerSettings = {
 	preffered_casing: 'None',
 	priorityTags: [],
 	statusBarCount: 3,
-	last_used_tag: ''
+	last_used_tag: '',
+	tag_stash: [""],
+	saved_stashes: [],
 }
 
 /** Main class for plugin
@@ -59,6 +69,7 @@ export default class QuickTagPlugin extends Plugin {
 			}
 		})
 
+		set_up_stashed_tags(this)
 		this.setupStatusBar();
 
 		this._statusBarStarredTags = new Array
@@ -263,7 +274,7 @@ class QuickTagSettingTab extends PluginSettingTab {
 			}));
 
 		new Setting(containerEl)
-			.setName('How many tags to show on the status bar')
+			.setName('Number of tags to show on the status bar')
 			.setDesc('Controls how many starred tags will be shown directly on the status bar. Others will be placed in a pop-up menu.')
 			.addSlider((component) => {
 				component.onChange(async (value) => {

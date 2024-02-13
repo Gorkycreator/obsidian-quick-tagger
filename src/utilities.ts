@@ -1,11 +1,13 @@
 import{ Notice, App, TFile, Menu, Component } from 'obsidian'
 import QuickTagPlugin, { QuickTaggerSettings, StarredTag } from "./main"
-import { ConfirmModal, QuickTagSelector } from './modal'
+import { ConfirmModal, QuickTagSelector, QuickTagSelectorLoop } from './modal'
 import { AddTagList, TagGatherer, TagsOnFiles } from './tag_gatherers'
 import { filterTag, getFilteredWithTag, getFilteredWithoutTag } from './file_filters'
-import { WOAH_LOTS_OF_FILES } from './constants'
+import { SPECIAL_COMMANDS, WOAH_LOTS_OF_FILES } from './constants'
+import { modal_selection_is_stash, populateStatusBarTagStashIndicator } from "./tag_stash"
 export { selectTag, addTagsWithModal, addTagWithModal, removeTagWithModal, removeTagsWithModal,
-	toggleTagOnActive, toggleTagOnFile, dynamicToggleCommand, dynamicAddMenuItems, constructTaggerContextMenu }
+	toggleTagOnActive, toggleTagOnFile, dynamicToggleCommand, dynamicAddMenuItems, constructTaggerContextMenu,
+    wordWrap, selectManyTags, modal_selection_is_special }
 export { _formatHashTag, _addFrontMatterTag, _cleanNoteContent, _getRemovalProcessor, 
 	_removeAllFrontMatterTags, _removeFrontMatterTag, _conformToArray, showStatusBarMenu }
 
@@ -187,18 +189,17 @@ async function showStatusBarMenu(plugin:QuickTagPlugin){
 
 	plugin._statusBarItemMenu = new Menu()
 
+	populateStatusBarTagStashIndicator(plugin._statusBarItemMenu, plugin.settings)
+
 	plugin._statusBarItemMenu.addItem((item) => {
 		item
 		  .setTitle("On active file...")
 		  .setIsLabel(true)
 	})
-	plugin._statusBarItemMenu.addSeparator()
 
 	if (current_file) {
 		populateStatusBarMenuItems([current_file], plugin)
 	}
-	
-	populateStatusBarTagStashIndicator(plugin._statusBarItemMenu, plugin.settings)
 	
 
 	let centerRect = (statusBarIconRect.left - statusBarIconRect.right) / 2 + statusBarIconRect.left
@@ -270,18 +271,6 @@ async function populateStatusBarMenuItems(files:TFile[], plugin: QuickTagPlugin)
 			})
 	})
 
-}
-
-
-async function populateStatusBarTagStashIndicator(menu: Menu, settings: QuickTaggerSettings){
-	menu.addSeparator()
-	menu.addItem((item) => {
-
-		// TODO: this needs to actually find the stashed tags, not the starred tags (that was used for testing)
-		let stashed_text = "Stashed tags:\n" + settings.priorityTags.map((e) => e.tag_value).join(", ")
-		stashed_text = wordWrap(stashed_text, 25, "\n ")
-		item.setTitle(stashed_text).setIsLabel(true)
-	})
 }
 
 
@@ -407,12 +396,27 @@ function _conformToArray(input:string | Array<string>){
  */
 function selectTag(plugin: QuickTagPlugin, gatherer?: TagGatherer, notes?: TFile[]): Promise<string>{
 	let active_gatherer = gatherer ? gatherer : new AddTagList
-	let active_notes = notes ? notes : []
+	let active_notes = notes ? notes : new Array
 	return new Promise((resolve) => {
-		new QuickTagSelector(plugin, active_gatherer, (result) => {resolve(result)}, active_notes).open();
+		new QuickTagSelector(plugin, active_gatherer, (result: string) => {resolve(result)}, active_notes).open();
 	})
 }
 
+
+/**
+ * 
+ */
+function selectManyTags(plugin: QuickTagPlugin, context?: QuickTagSelectorLoop | null, gatherer?: TagGatherer, notes?: TFile[]): Promise<string[]>{
+	let active_gatherer = gatherer ? gatherer: new AddTagList
+	let active_notes = notes ? notes : new Array
+	return new Promise((resolve) => {
+		if (context){
+			context.open()
+		} else {
+			new QuickTagSelectorLoop(plugin, active_gatherer, (result: string[]) => resolve(result), active_notes).open()
+		}
+	})
+}
 
 /** Spawn notification for user that tags were added/removed successfully
  * 
@@ -723,4 +727,9 @@ async function update_last_used_tag(plugin: QuickTagPlugin, tag: string){
 			toggleTagOnActive(plugin, tag)
 		}
 	})
+}
+
+
+function modal_selection_is_special(str: string): boolean{
+	return SPECIAL_COMMANDS.includes(str) || modal_selection_is_stash(str)
 }

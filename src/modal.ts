@@ -2,8 +2,9 @@ import { App, FuzzySuggestModal, Modal, Setting, Notice, TFile, renderResults, p
 import QuickTagPlugin, {QuickTaggerSettings} from "./main"
 import { SPECIAL_COMMANDS } from "./constants"
 import { prep_clean_query } from "clean_inputs";
-import { TagGatherer } from "tag_gatherers";
-export { ConfirmModal, QuickTagSelector }
+import { RecursiveTagLoop, TagGatherer } from "tag_gatherers";
+import { modal_selection_is_special, selectManyTags } from "utilities";
+export { ConfirmModal, QuickTagSelector, QuickTagSelectorLoop }
 
 
 /** This modal class handles selecting a tag and should pass a tag back to the main function.
@@ -11,7 +12,7 @@ export { ConfirmModal, QuickTagSelector }
  */
 class QuickTagSelector extends FuzzySuggestModal<string> {
     plugin: QuickTagPlugin
-    onChooseItemCallback: (result: string) => void
+    onChooseItemCallback: (result: string | string[]) => string | string[] | void
     gatherer: Function
     settings: QuickTaggerSettings
     fileList: TFile[]
@@ -19,9 +20,10 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
     inputListener: EventListener
     tagCache: string[]
     new_tags_enabled: boolean
+    message_box: HTMLHeadElement
 
     
-    constructor (plugin: QuickTagPlugin, gatherer: TagGatherer, onChooseItemCallback: (result: string) => void, fileList?: Array<TFile>){
+    constructor (plugin: QuickTagPlugin, gatherer: TagGatherer, onChooseItemCallback: (result: string | string[]) => string | void, fileList?: Array<TFile>){
         super(plugin.app)
         this.plugin = plugin
         this.gatherer = gatherer.retrieve_tags
@@ -35,7 +37,7 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
     }
 
     onOpen() {
-        this.setPlaceholder("Select a tag")
+        this.setPlaceholder("Select a tag (hit ESC to cancel)")
         this.inputEl.addEventListener('keyup', this.inputListener)
         super.onOpen()
     }
@@ -89,7 +91,7 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
 
         if(this.tagCache.length == 0){
             // only gather tags when this is initially created
-            this.tagCache = this.gatherer(this, this.fileList)
+            this.tagCache = this.gatherer(this.plugin, this.fileList)
         }
         
         return this.tagCache
@@ -100,8 +102,52 @@ class QuickTagSelector extends FuzzySuggestModal<string> {
     }
 
     async onChooseItem(result: string) {
-        let cleaned_tag = SPECIAL_COMMANDS.includes(result) ? result : result.split(' ')[0]
+        let cleaned_tag = modal_selection_is_special(result) ? result : result.split(' ')[0]
         this.onChooseItemCallback(cleaned_tag)
+    }
+}
+
+
+
+class QuickTagSelectorLoop extends QuickTagSelector {
+    tags: string[]
+    recursive_gather: TagGatherer
+    onChooseItemCallback: (result: string[]) => string[] | void;
+
+    constructor (plugin: QuickTagPlugin, gatherer: TagGatherer, onChooseItemCallback: (result: string[]) => string[] | void, fileList?: Array<TFile>){
+        super(plugin, gatherer, (result: string) => {}, fileList? fileList : new Array)
+        this.recursive_gather = new RecursiveTagLoop(this, gatherer)
+        this.gatherer = this.recursive_gather.retrieve_tags.bind(this.recursive_gather)
+        this.onChooseItemCallback = onChooseItemCallback
+        this.tags = new Array
+
+
+        this.message_box = this.modalEl.createEl('h5', {text:'No tags selected'})
+        this.message_box.addClass('quick-tagger-modal-message-box')
+        this.message_box.setCssStyles({textAlign: "center", margin: "auto auto auto auto", padding: "0.5em 2em 0.5em 2em"})  // TODO: maybe this should go in a sytles.css?
+        this.modalEl.insertAfter(this.message_box, null)
+    }
+
+    getItems(): string[] {
+        if(!this.gatherer){
+            new Notice("Error: Could not find tags!")
+            return []
+        }
+        
+        return this.gatherer(this.plugin, this.fileList)
+    }
+
+    async onChooseItem(result: string) {
+        let cleaned_tag = SPECIAL_COMMANDS.includes(result) ? result : result.split(' ')[0]
+        if (cleaned_tag == "FINISHED SELECTING TAGS"){
+            this.onChooseItemCallback(this.tags)
+            return
+        }
+        if(!this.tags.contains(cleaned_tag)){
+            this.tags.push(cleaned_tag)
+        }
+        this.message_box.setText("Selected: " + this.tags.join(", "))
+        selectManyTags(this.plugin, this)
     }
 }
 
