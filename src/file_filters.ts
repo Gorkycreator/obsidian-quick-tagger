@@ -1,20 +1,20 @@
 // this file holds functions to filter the files based on tag and other criteria
 import { TFile, parseFrontMatterTags } from "obsidian"
-export { getFilteredWithTag, getFilteredWithoutTag, filterTag, onlyTaggableFiles }
+export { getFilteredWithTags, getFilteredWithoutTags, filterTags, onlyTaggableFiles }
 import { SPECIAL_COMMANDS } from "./constants"
 
 
-/** Filters array of files to only those that DO have the given tag
+/** Filters array of files to only those that DO have at least one of the given tags
  * 
  * @param fileList 
  * @param tag 
  * @returns 
  */
-function getFilteredWithTag(fileList:TFile[], tag:string){
+function getFilteredWithTags(fileList:TFile[], tags:string[]){
     // early exit if the "tag" is a special command.
-	if (SPECIAL_COMMANDS.includes(tag)){ return fileList }
+	if (SPECIAL_COMMANDS.includes(tags[0])){ return fileList }
 
-	let resultList = fileList.filter(file => filterTag(file, tag) == true)
+	let resultList = fileList.filter(file => {return filterTags(file, tags) == true})
 	return resultList
 }
 
@@ -25,25 +25,29 @@ function getFilteredWithTag(fileList:TFile[], tag:string){
  * @param tag 
  * @returns TFile[]
  */
-function getFilteredWithoutTag(fileList:TFile[], tag:string){
+function getFilteredWithoutTags(fileList:TFile[], tags:string[]){
     // early exit if the "tag" is a special command.
-	if (SPECIAL_COMMANDS.includes(tag)){ return fileList }
+	if (SPECIAL_COMMANDS.includes(tags[0])){ return fileList }
 
-	let resultList = fileList.filter(file => filterTag(file, tag) == false)
-	return resultList
+	console.log(fileList) // TODO: remove debug
+	console.log(filterTags(fileList[0], tags)) // TODO: remove debug
+	fileList.filter((file) => {return filterTags(file, tags) == false})
+	console.log(fileList) // TODO: remove debug
+	
+	return fileList
 }
 
 
-/** Get note cache and return true/false if it includes given tag
+/** Get note cache and return true if it includes all of the given tags
  * 
  * @param thisFile 
  * @param tag 
  * @returns 
  */
-function filterTag(thisFile: TFile, tag: string){
+function filterTags(thisFile: TFile, tags: string[]){
 	let cache = this.app.metadataCache.getFileCache(thisFile)
 	let existing_tags = parseFrontMatterTags(cache.frontmatter)
-	if (existing_tags?.includes(tag)){
+	if (existing_tags?.filter((tag) => {return tags.includes(tag)})){
 		return true
 	} else {
 		return false

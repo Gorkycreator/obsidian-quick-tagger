@@ -2,6 +2,8 @@ export const SPECIAL_COMMANDS = ['REMOVE ALL', 'FINISHED SELECTING TAGS']
 export const WOAH_LOTS_OF_FILES = 20
 export const ACTIVE_STASH_TITLE = "ACTIVE STASH"
 export const STASH_INDICATOR = " (stash): "
+export const TAG_KEY = "tags"
+export const TAG_CLEANUP_KEYS = ['tag', 'Tag', 'Tags']
 
 export const KNOWN_BAD_CHARACTERS = [
     "‒",

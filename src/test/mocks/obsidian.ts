@@ -10,6 +10,10 @@ class App {
             return(['testing1', 'testing2', 'testing3'])
         }
     }
+
+    commands = {
+
+    }
 }
 
 class TFile {

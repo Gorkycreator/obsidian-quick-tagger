@@ -1,6 +1,6 @@
-import { _cleanNoteContent, _formatHashTag, _addFrontMatterTag, _getRemovalProcessor,
+import { _cleanNoteContent, _formatHashTag, _addFrontMatterTags, _getRemovalProcessor,
          _removeAllFrontMatterTags, _removeFrontMatterTag, _conformToArray } from "utilities"
-import { TFile } from "obsidian"
+import { App, TFile } from "obsidian"
 
 test('removes leading newlines and trailing spaces from yaml header', () => {
     expect(_cleanNoteContent(`
@@ -62,7 +62,7 @@ class TestFrontmatterTag{
 
 // Test _addFrontMatterTag
 test('test after adding a tag', () => {
-    let execution = new TestFrontmatterTag('hello', _addFrontMatterTag);
+    let execution = new TestFrontmatterTag('hello', _addFrontMatterTags);
     execution.run()(mock_yaml);
     expect(mock_yaml).toStrictEqual(fixed_mock_yaml);
 })
@@ -70,11 +70,11 @@ test('test after adding a tag', () => {
 
 // test getting the correct removal processor
 test('get remove single tag processor', () => {
-    expect(_getRemovalProcessor('something')).toBe(_removeFrontMatterTag)
+    expect(_getRemovalProcessor(['something'])).toBe(_removeFrontMatterTag)
 })
 
 test('get remove all tag processor', () => {
-    expect(_getRemovalProcessor('REMOVE ALL')).toBe(_removeAllFrontMatterTags)
+    expect(_getRemovalProcessor(['REMOVE ALL'])).toBe(_removeAllFrontMatterTags)
 })
 
 

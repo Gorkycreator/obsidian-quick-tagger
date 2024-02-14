@@ -53,8 +53,9 @@ This plugin does not keep track of changes in an undo/redo queue, please be awar
 - [x] Tweak right-click behavior to toggle tags when tagging a single note
 - [x] Permit adding new tag from tag selector
 - [x] Toggle recently used tag command
+- [x] Dialog to add many tags to notes
+- [x] Tag Stashing
 - [ ] Tag chains (cycle through a list of tags)
-- [ ] Dialog to add many tags to notes
 - [ ] Dialog to convert tags to linklist items (and vice versa)[^2]
 
 [^2]: For some reason I thought "linklist" was a more official term. Apparently I just picked it up from the example in the [1.4.0 release notes](https://obsidian.md/changelog/2023-07-26-desktop-v1.4.0/) and ran with it.

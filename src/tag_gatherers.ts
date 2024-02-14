@@ -2,7 +2,7 @@
 import { QuickTagSelectorLoop } from "modal"
 import QuickTagPlugin, { QuickTaggerSettings, StarredTag } from "./main"
 import { TFile, parseFrontMatterTags } from "obsidian"
-import { add_tag_stashes } from "tag_stash"
+import { add_tag_stash_options_to_tag_gatherer } from "tag_stash"
 export { AddTagList, TagsOnFiles, NonStarredTags, BaseGatherer, NonStashedTags, StashedTags,
 	     RecursiveTagLoop }
 
@@ -66,7 +66,7 @@ class AddTagList extends BaseGatherer implements TagGatherer {
 			}
 		}
 
-		add_tag_stashes(tag_array, plugin.settings)
+		add_tag_stash_options_to_tag_gatherer(tag_array, plugin.settings)
 		
 		return tag_array
 	}
