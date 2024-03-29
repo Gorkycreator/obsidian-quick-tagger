@@ -1,7 +1,7 @@
 import { Notice, Plugin, TFile, PluginSettingTab, Setting, Menu, setIcon, MenuItem } from 'obsidian';
-import { dynamicToggleCommand, addTagWithModal, toggleTagOnActive,
-	     selectTag, removeTagWithModal, constructTaggerContextMenu,
-		 showStatusBarMenu } from './utilities';
+import { dynamicToggleCommand, addTagsToActiveFileWithModal, toggleTagOnActive,
+	     selectTag, removeTagsFromActiveFileWithModal, constructTaggerContextMenu,
+		 showStatusBarMenu, addTagsToActiveFileWithLoopingModal } from './utilities';
 import { NonStarredTags } from './tag_gatherers';
 import { onlyTaggableFiles } from './file_filters';
 import { set_up_stashed_tags } from './tag_stash';
@@ -77,28 +77,36 @@ export default class QuickTagPlugin extends Plugin {
 
 		// Ribbon Icons
 		const addTagRibbonIcon = this.addRibbonIcon('tag', 'Add tag to current note', async (evt: MouseEvent) => {
-			addTagWithModal(this)
+			addTagsToActiveFileWithModal(this)
 		});
 
 		const removeTagRibbonIcon = this.addRibbonIcon('x-square', 'Remove tag from current note', (evt: MouseEvent) => {
-			removeTagWithModal(this)
+			removeTagsFromActiveFileWithModal(this)
 		});
 
 
 		// Command Pallet Commands
 		this.addCommand({
 			id: 'quick-add-tag',
-			name: 'Add tag',
+			name: 'Add tag(s)',
 			callback: () => {
-				addTagWithModal(this)
+				addTagsToActiveFileWithModal(this)
 			}
 		});
+
+		this.addCommand({
+			id: 'quick-add-tag-loop',
+			name: 'Add tag(s) with looping modal',
+			callback: () => {
+				addTagsToActiveFileWithLoopingModal(this)
+			}
+		})
 
 		this.addCommand({
 			id: 'quick-remove-tag',
 			name: 'Remove tag',
 			callback: () => {
-				removeTagWithModal(this)
+				removeTagsFromActiveFileWithModal(this)
 			}
 		});
 

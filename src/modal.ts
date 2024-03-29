@@ -3,7 +3,8 @@ import QuickTagPlugin, {QuickTaggerSettings} from "./main"
 import { SPECIAL_COMMANDS } from "./constants"
 import { prep_clean_query } from "clean_inputs";
 import { RecursiveTagLoop, TagGatherer } from "tag_gatherers";
-import { modal_selection_is_special, selectManyTags } from "utilities";
+import { modal_selection_is_special, parseModalTags, selectManyTags } from "utilities";
+import { modal_selection_is_a_stash } from "tag_stash";
 export { ConfirmModal, QuickTagSelector, QuickTagSelectorLoop }
 
 
@@ -138,14 +139,17 @@ class QuickTagSelectorLoop extends QuickTagSelector {
     }
 
     async onChooseItem(result: string) {
-        let cleaned_tag = SPECIAL_COMMANDS.includes(result) ? result : result.split(' ')[0]
+        let cleaned_tag = modal_selection_is_special(result) ? result : result.split(' ')[0]
         if (cleaned_tag == "FINISHED SELECTING TAGS"){
             this.onChooseItemCallback(this.tags)
             return
         }
-        if(!this.tags.contains(cleaned_tag)){
-            this.tags.push(cleaned_tag)
-        }
+        let cleaned_tags = parseModalTags(cleaned_tag)
+        cleaned_tags.forEach((t) => {
+            if(!this.tags.contains(t)){
+                this.tags.push(t)
+            }
+        })
         this.message_box.setText("Selected: " + this.tags.join(", "))
         selectManyTags(this.plugin, this)
     }

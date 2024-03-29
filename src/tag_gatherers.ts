@@ -3,6 +3,7 @@ import { QuickTagSelectorLoop } from "modal"
 import QuickTagPlugin, { QuickTaggerSettings, StarredTag } from "./main"
 import { TFile, parseFrontMatterTags } from "obsidian"
 import { add_tag_stash_options_to_tag_gatherer } from "tag_stash"
+import { getTagsFromFile } from "utilities"
 export { AddTagList, TagsOnFiles, NonStarredTags, BaseGatherer, NonStashedTags, StashedTags,
 	     RecursiveTagLoop }
 
@@ -56,13 +57,9 @@ class AddTagList extends BaseGatherer implements TagGatherer {
 		// filter out tags on existing note (only if there's a single note)
 		if(fileList && fileList.length == 1){
 			let f = fileList[0]
-			let cache = plugin.app.metadataCache.getFileCache(f)
-			if (cache){
-				let existing_tags = parseFrontMatterTags(cache.frontmatter)
-				if(existing_tags){
-					existing_tags.map((e) => e.replace('#', '')).filter((e) => e).map((e) => '#' + e)
-					tag_array = tag_array.filter((tag) => {return !existing_tags?.contains(tag)})
-				}
+			let existing_tags = getTagsFromFile(plugin, f)
+			if(existing_tags){
+				tag_array = tag_array.filter((tag) => {return !existing_tags?.contains(tag)})
 			}
 		}
 

@@ -1,13 +1,15 @@
-import{ Notice, App, TFile, Menu, Component, MenuItem } from 'obsidian'
+import{ Notice, App, TFile, Menu, Component, MenuItem, parseFrontMatterTags } from 'obsidian'
 import QuickTagPlugin, { QuickTaggerSettings, StarredTag } from "./main"
 import { ConfirmModal, QuickTagSelector, QuickTagSelectorLoop } from './modal'
 import { AddTagList, TagGatherer, TagsOnFiles } from './tag_gatherers'
 import { filterTags, getFilteredWithTags, getFilteredWithoutTags } from './file_filters'
 import { SPECIAL_COMMANDS, TAG_KEY, WOAH_LOTS_OF_FILES, TAG_CLEANUP_KEYS } from './constants'
-import { is_modal_selection_a_stash, populateStatusBarTagStashIndicator } from "./tag_stash"
-export { selectTag, addTagsWithModal, addTagWithModal, removeTagWithModal, removeTagsWithModal,
+import { addCopyPasteMenuItems, modal_selection_is_a_stash, populateStatusBarTagStashIndicator } from "./tag_stash"
+import { parse } from 'path'
+export { selectTag, addTagsWithModal, addTagsToActiveFileWithModal, removeTagsFromActiveFileWithModal, removeTagsWithModal,
 	toggleTagOnActive, toggleTagOnFile, dynamicToggleCommand, dynamicAddMenuItems, constructTaggerContextMenu,
-    wordWrap, selectManyTags, modal_selection_is_special }
+    wordWrap, selectManyTags, modal_selection_is_special, addTagsToActiveFileWithLoopingModal, parseModalTags, getTagsFromFile,
+    getActiveFile, addTagsDirectly }
 export { _formatHashTag, _addFrontMatterTags, _cleanNoteContent, _getRemovalProcessor, 
 	_removeAllFrontMatterTags, _removeFrontMatterTag, _conformToArray, showStatusBarMenu }
 
@@ -16,7 +18,7 @@ export { _formatHashTag, _addFrontMatterTags, _cleanNoteContent, _getRemovalProc
  * 
  * @returns Tfile array
  */
-function _getActiveFile() {
+function getActiveFile() {
 	let thisFile = this.app.workspace.getActiveFile()
 	if(thisFile instanceof TFile) {
 		return [thisFile]
@@ -27,14 +29,28 @@ function _getActiveFile() {
 }
 
 
+function getTagsFromFile(plugin: QuickTagPlugin, file: TFile){
+	let cache = plugin.app.metadataCache.getFileCache(file)
+	let existing_tags: string[] = []
+	if (cache){
+		let parsed_frontmatter = parseFrontMatterTags(cache.frontmatter)
+		existing_tags = parsed_frontmatter ? parsed_frontmatter : []
+		if(existing_tags.length > 0){
+			existing_tags.map((e) => e.replace('#', '')).filter((e) => e).map((e) => '#' + e)
+		}
+	}
+	console.log(`tags_in_func: ${existing_tags}`)  // TODO: remove debugging
+	return existing_tags
+}
+
+
 /** Add a tag to a note
  * 
  * @param thisFile the file to edit
  * @param tag the tag to add
  */
 async function _addTags(thisFile: TFile, tags: string[]){
-	console.log("hello") // TODO: remove debug
-	this.tags = tags.map((tag) => _formatHashTag(tag))
+	this.tags = tags.map((tag: string) => _formatHashTag(tag))
 	await _cleanFile(thisFile)
 	await this.app.fileManager.processFrontMatter(thisFile, _addFrontMatterTags.bind(this))
 }
@@ -45,15 +61,18 @@ async function _addTags(thisFile: TFile, tags: string[]){
  * @param frontmatter an object with a tags key
  */
 function _addFrontMatterTags(frontmatter: {tags: string[]}){
-	console.log("FRONTMATTER") // TODO: remove debug
+	console.log(frontmatter) // TODO: remove debug
 	frontmatter = _collectExistingTags(frontmatter);
+	console.log(frontmatter) // TODO: remove debug
 	frontmatter[TAG_KEY] = frontmatter[TAG_KEY].map((t:string) => _formatHashTag(t))
+	console.log(frontmatter) // TODO: remove debug
 
 	// https://www.peterbe.com/plog/merge-two-arrays-without-duplicates-in-javascript
 	let merged = [...new Set([...frontmatter[TAG_KEY], ...this.tags])]
-	console.log(merged)
+	console.log(merged) // TODO: remove debug
 
 	frontmatter[TAG_KEY] = merged
+	console.log(frontmatter) // TODO: remove debug
 }
 
 
@@ -116,6 +135,7 @@ function _toggleTags(files: TFile[], input_tag: string): number[] {
 
 	for(let i=0; i<files.length; i++){
 		let exists = filterTags(files[i], [`#${tag}`])
+		console.log(`exists: ${exists}`)  // TODO: remove debugging
 		if(!exists){
 			_addTags(files[i], [tag])
 			tag_added++
@@ -124,6 +144,9 @@ function _toggleTags(files: TFile[], input_tag: string): number[] {
 			tag_removed++
 		}
 	}
+
+	console.log(`Tags added: ${tag_added}`)  // TODO: remove debugging
+	console.log(`Tags removed: ${tag_removed}`)  // TODO: remove debugging
 	return [tag_added, tag_removed]
 }
 
@@ -290,7 +313,7 @@ async function _cleanFile(f:TFile){
 	// if anything was changed, write it back to the file
 	if(modified){
 		console.log(`fixing up broken parts of ${f.basename}'s yaml...`)
-		await this.app.vault.modify(f, text)
+		await this.app.vault.modify(f, modified)
 	}
 }
 
@@ -316,9 +339,19 @@ function _cleanNoteContent(content:string){
 			content = content.replace(matches[1], "---\n")
 			modified = true
 		}
+	} else {  // Make yaml if it doesn't exist becaue processfrontmatter broke in Obsidian 1.5.5
+		// Bug report: https://forum.obsidian.md/t/filemanager-processfrontmatter-creates-plain-text-at-the-top-of-the-note-if-there-are-no-existing-properties/77008
+		// Leaving this here to avoid potential regression bugs.
+		//
+		// I'd rather not have to deal with feeling anxious about bering corrected for missing some open post
+		// on the forum, so I'll just leave that to others who are more familiar with the current goings-ons.
+		// ...WhiteNoise's bluntness towards my mistake was discouraging.
+		content = "---\n---\n" + content
+		modified = true
 	}
 
 	if(modified){
+		console.log(content)
 		return content
 	} else {
 		return false
@@ -335,6 +368,20 @@ function _formatHashTag(tag:string){
 }
 
 
+function parseModalTags(input:string){
+	if(modal_selection_is_a_stash(input)){
+		let clean_input = input.split(":")[1].trim()
+		let dirty_tags = clean_input.split(',')
+		let tags: string[] = []
+		dirty_tags.forEach((t) => tags.push(t.trim()))
+		return tags
+	} else {
+		return [input]
+	}
+
+}
+
+
 /** Collect all recognized tag list variations into one key
  * 
  * @param yaml - a single yaml dict 
@@ -343,7 +390,7 @@ function _formatHashTag(tag:string){
 function _collectExistingTags(yml:any){
 	// make the desired key, if it does not exist
 	if (!yml.hasOwnProperty(TAG_KEY) || yml[TAG_KEY] === null){
-		yml[TAG_KEY] = []
+		yml[TAG_KEY] = new Array
 	} else {
 		// catch existing string formatting that works in obsidian, but not javascript
 		yml[TAG_KEY] = _conformToArray(yml[TAG_KEY])
@@ -419,7 +466,7 @@ function selectManyTags(plugin: QuickTagPlugin, context?: QuickTagSelectorLoop |
 	let active_gatherer = gatherer ? gatherer: new AddTagList
 	let active_notes = notes ? notes : new Array
 	return new Promise((resolve) => {
-		if (context){
+		if (context){  // this is how we call the loping modal recursively. The first run will not have context, but subsequent callbacks of the QuickTagSelectorLoop will provide itself as context.
 			context.open()
 		} else {
 			new QuickTagSelectorLoop(plugin, active_gatherer, (result: string[]) => resolve(result), active_notes).open()
@@ -495,7 +542,15 @@ function constructTaggerContextMenu(menu: Menu, files: TFile[], plugin: QuickTag
 				addTagsWithModal(plugin, files)
 			})
 		  })
+		  .addItem((item: MenuItem) =>{
+			item.setTitle("Tag " + files.length + " file(s) with many...")
+			.setIcon("infinity")
+			.onClick(() =>{
+				addManyTagsWithLoopModal(plugin, files)
+			})
+		  })
 		
+		addCopyPasteMenuItems(subMenu, files, plugin)
 		dynamicAddMenuItems(subMenu, files, plugin)
 
 		subMenu.addItem((item: MenuItem) =>{
@@ -598,16 +653,31 @@ async function adjust_tag_dialog(msg: string){
  */
 async function addTagsWithModal(plugin: QuickTagPlugin, files: TFile[]){
 	let tag = await selectTag(plugin, new AddTagList, files)
-	addTagsDirectly(plugin, files, [tag])
+	let tags = parseModalTags(tag)
+	addTagsDirectly(plugin, files, tags)
+}
+
+async function addManyTagsWithLoopModal(plugin: QuickTagPlugin, files: TFile[]){
+	let tags = await selectManyTags(plugin, null, new AddTagList, files)
+	let clean_tags: string[] = []
+	tags.forEach((t) => {
+		clean_tags = [...new Set([...clean_tags, ...parseModalTags(t)])]
+	})
+	addTagsDirectly(plugin, files, tags)
 }
 
 
 /** Convenience function to get active, then call tag selection dialog
  * 
  */
-async function addTagWithModal(plugin: QuickTagPlugin){
-	let currentFile = _getActiveFile()
+async function addTagsToActiveFileWithModal(plugin: QuickTagPlugin){
+	let currentFile = getActiveFile()
 	addTagsWithModal(plugin, currentFile)
+}
+
+async function addTagsToActiveFileWithLoopingModal(plugin: QuickTagPlugin){
+	let currentFile = getActiveFile()
+	addManyTagsWithLoopModal(plugin, currentFile)
 }
 
 
@@ -625,8 +695,8 @@ async function removeTagsWithModal(plugin: QuickTagPlugin, files: TFile[]){
 /** Convenience function to get active, then call tag selection dialog
  * 
  */
-async function removeTagWithModal(plugin: QuickTagPlugin){
-	let currentFile = _getActiveFile()
+async function removeTagsFromActiveFileWithModal(plugin: QuickTagPlugin){
+	let currentFile = getActiveFile()
 	await removeTagsWithModal(plugin, currentFile)
 }
 
@@ -636,7 +706,7 @@ async function removeTagWithModal(plugin: QuickTagPlugin){
  * @param tag 
  */
 function toggleTagOnActive(plugin: QuickTagPlugin, tag: string){
-	let file = _getActiveFile()
+	let file = getActiveFile()
 	toggleTagOnFile(plugin, file, [tag])
 }
 
@@ -690,7 +760,7 @@ async function addTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tags: str
  * @param tag 
  */
 async function addTagsDirectlyToActive(plugin: QuickTagPlugin, tags: string[]){
-	let file = _getActiveFile()
+	let file = getActiveFile()
 	addTagsDirectly(plugin, file, tags)
 }
 
@@ -722,7 +792,7 @@ async function removeTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tags: 
  * 
  */
 async function removeTagsDirectlyFromActive(plugin: QuickTagPlugin, tags: string[]){
-	let file = _getActiveFile()
+	let file = getActiveFile()
 	removeTagsDirectly(plugin, file, tags)
 }
 
@@ -755,5 +825,5 @@ async function update_last_used_tag(plugin: QuickTagPlugin, tags: string[]){
 
 
 function modal_selection_is_special(str: string): boolean{
-	return SPECIAL_COMMANDS.includes(str) || is_modal_selection_a_stash(str)
+	return SPECIAL_COMMANDS.includes(str) || modal_selection_is_a_stash(str)
 }

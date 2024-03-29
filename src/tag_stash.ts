@@ -1,12 +1,13 @@
 import QuickTagPlugin, { QuickTaggerSettings } from "main";
-import { selectTag, selectManyTags, wordWrap } from "./utilities"
-import { Menu, MenuItem } from "obsidian";
+import { selectTag, selectManyTags, wordWrap, getTagsFromFile, getActiveFile, addTagsDirectly } from "./utilities"
+import { Menu, MenuItem, Notice, TFile } from "obsidian";
 import { NonStashedTags, StashedTags } from "./tag_gatherers";
 import { ACTIVE_STASH_TITLE } from "./constants";
 import { STASH_INDICATOR } from "./constants";
 import { clear } from "console";
+import { onlyTaggableFiles } from "file_filters";
 export { set_up_stashed_tags, populateStatusBarTagStashIndicator, add_tag_stash_options_to_tag_gatherer,
-    is_modal_selection_a_stash }
+    modal_selection_is_a_stash, addCopyPasteMenuItems }
 
 async function set_up_stashed_tags(plugin: QuickTagPlugin) {
     plugin.settings.tag_stash = new Array
@@ -20,14 +21,7 @@ async function set_up_stashed_tags(plugin: QuickTagPlugin) {
     plugin.addCommand({
         id: 'stash-multiple-tags',
         name: 'Stash multiple tags',
-        callback: async () => {
-            let tags = await selectManyTags(plugin, null, new NonStashedTags)
-            tags.forEach((tag) => {
-                plugin.settings.tag_stash.push(tag)
-            })
-            plugin.settings.tag_stash.sort()
-            await plugin.saveSettings()
-        }
+        callback: () => {add_many_tags_to_stash(plugin)}
     })
 
     plugin.addCommand({
@@ -36,7 +30,11 @@ async function set_up_stashed_tags(plugin: QuickTagPlugin) {
         callback: async () => {remove_tag_from_stash(plugin)}
     });
 
-    // TODO: add command to copy tags from current note
+    plugin.addCommand({
+        id: 'copy-tags-from-active',
+        name: 'Copy tags on active to stash',
+        callback: async () => {copy_tags_on_active_to_stash(plugin)}
+    })
 
     // TODO: add file-menu to copy tags from note
 
@@ -46,9 +44,34 @@ async function set_up_stashed_tags(plugin: QuickTagPlugin) {
 }
 
 
+async function addCopyPasteMenuItems(menu: Menu, files: TFile[], plugin: QuickTagPlugin){
+    menu.addItem((item) =>{
+        item
+            .setTitle("Copy tags to stash")
+            .setIcon("clipboard-copy")
+            .onClick(async () => {
+                console.log(files)  // TODO: remove debugging
+                let result = copy_tags_from_files_to_stash(plugin, files)
+                if(!result){
+                    new Notice(`No tags on selected files! Stash was not modified.`)
+                }
+            })
+    })
+}
+
+
 async function add_tag_to_stash(plugin: QuickTagPlugin) {
     let tag = await selectTag(plugin, new NonStashedTags)
     plugin.settings.tag_stash.push(tag)
+    plugin.settings.tag_stash.sort()
+    await plugin.saveSettings()
+}
+
+async function add_many_tags_to_stash(plugin: QuickTagPlugin) {
+    let tags = await selectManyTags(plugin, null, new NonStashedTags)
+    tags.forEach((tag) => {
+        plugin.settings.tag_stash.push(tag)
+    })
     plugin.settings.tag_stash.sort()
     await plugin.saveSettings()
 }
@@ -73,6 +96,48 @@ async function clear_stash(plugin: QuickTagPlugin){
 }
 
 
+async function copy_tags_on_active_to_stash(plugin: QuickTagPlugin){
+    let file = getActiveFile()
+    let result = copy_tags_from_files_to_stash(plugin, file)
+    if(!result){
+        new Notice(`No tags on ${file}! Stash was not modified.`)
+    }
+}
+
+async function copy_tags_from_files_to_stash(plugin: QuickTagPlugin, files: TFile[]){
+    let tags: string[] = []
+    for(let i=0;i < files.length; i++){
+        let new_tags = getTagsFromFile(plugin, files[i])
+        console.log(`tags_mid_loop: ${new_tags}`)  // TODO: remove debugging
+        tags = [...new Set([...tags, ...new_tags])]
+    }
+    console.log(`stashing tags... ${tags}`)  // TODO: remove debugging
+    return copy_tags_to_stash(plugin, tags)
+    
+}
+
+async function copy_tags_to_stash(plugin: QuickTagPlugin, tags: string[]){
+    if(tags.length > 0){
+        clear_stash(plugin)
+
+        tags.forEach((tag) => {
+            plugin.settings.tag_stash.push(tag)
+        })
+        plugin.settings.tag_stash.sort()
+        await plugin.saveSettings()
+        return true
+    } else {
+        return false
+    }
+}
+
+
+async function paste_tags_on_note(plugin: QuickTagPlugin, file: TFile[]){
+    let tags = plugin.settings.tag_stash
+    addTagsDirectly(plugin, file, tags)
+}
+
+
 async function save_stash(plugin: QuickTagPlugin){
     // TODO need a dialog to input stash name
 }
@@ -92,20 +157,24 @@ async function populateStatusBarTagStashIndicator(menu: Menu, plugin: QuickTagPl
 
         subMenu
         .addItem((item: MenuItem) => {
-            item.setTitle("Add Tag")
+            item.setTitle("Add tag")
             .onClick(async () => {add_tag_to_stash(plugin)})
         })
+        .addItem((item: MenuItem) =>{
+            item.setTitle("Add multiple")
+            .onClick(async () => {add_many_tags_to_stash(plugin)})
+        })
         .addItem((item: MenuItem) => {
-            item.setTitle("Remove Tag")
+            item.setTitle("Remove tag")
             .onClick(async () => {remove_tag_from_stash(plugin)})
         })
         .addItem((item: MenuItem) => {
-            item.setTitle("Clear Stash")
+            item.setTitle("Clear stash")
             .onClick(async () => {clear_stash(plugin)})
         })
         .addSeparator()
         .addItem((item: MenuItem) =>{
-            item.setTitle("Save Stash")
+            item.setTitle("Save stash")
             // TODO: add callback function
         })
     })
@@ -156,6 +225,6 @@ function parse_tag_stash_entry(user_choice: string): string[]{
  * @param str 
  * @returns 
  */
-function is_modal_selection_a_stash(str: string){
+function modal_selection_is_a_stash(str: string){
     return str.contains(STASH_INDICATOR) || str.contains(ACTIVE_STASH_TITLE)
 }

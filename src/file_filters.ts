@@ -46,8 +46,12 @@ function getFilteredWithoutTags(fileList:TFile[], tags:string[]){
  */
 function filterTags(thisFile: TFile, tags: string[]){
 	let cache = this.app.metadataCache.getFileCache(thisFile)
+	if (!cache){return false}
 	let existing_tags = parseFrontMatterTags(cache.frontmatter)
-	if (existing_tags?.filter((tag) => {return tags.includes(tag)})){
+	console.log(`existing tags: ${existing_tags}`)  // TODO: remove debugging
+	let filtered_tags = existing_tags?.filter((tag) => {return tags.includes(tag)})
+	filtered_tags = filtered_tags ? filtered_tags : []
+	if (filtered_tags.length > 0){
 		return true
 	} else {
 		return false
