@@ -9,7 +9,7 @@ import { parse } from 'path'
 export { selectTag, addTagsWithModal, addTagsToActiveFileWithModal, removeTagsFromActiveFileWithModal, removeTagsWithModal,
 	toggleTagOnActive, toggleTagOnFile, dynamicToggleCommand, dynamicAddMenuItems, constructTaggerContextMenu,
     wordWrap, selectManyTags, modal_selection_is_special, addTagsToActiveFileWithLoopingModal, parseModalTags, getTagsFromFile,
-    getActiveFile, addTagsDirectly }
+    getActiveFile, addTagsDirectly, removeAllTagsDirectly }
 export { _formatHashTag, _addFrontMatterTags, _cleanNoteContent, _getRemovalProcessor, 
 	_removeAllFrontMatterTags, _removeFrontMatterTag, _conformToArray, showStatusBarMenu }
 
@@ -550,7 +550,6 @@ function constructTaggerContextMenu(menu: Menu, files: TFile[], plugin: QuickTag
 			})
 		  })
 		
-		addCopyPasteMenuItems(subMenu, files, plugin)
 		dynamicAddMenuItems(subMenu, files, plugin)
 
 		subMenu.addItem((item: MenuItem) =>{
@@ -561,6 +560,10 @@ function constructTaggerContextMenu(menu: Menu, files: TFile[], plugin: QuickTag
 				removeTagsWithModal(plugin, files)
 			  })
 		})
+
+		subMenu.addSeparator()
+
+		addCopyPasteMenuItems(subMenu, files, plugin)
 	})
 }
 
@@ -797,11 +800,24 @@ async function removeTagsDirectlyFromActive(plugin: QuickTagPlugin, tags: string
 }
 
 
+async function removeAllTagsDirectly(plugin: QuickTagPlugin, files: TFile[]){
+	_applyTagChanges(plugin, ["REMOVE ALL"], files, _removeTagsFromMany, 'remove')
+}
+
+
 async function update_last_used_tag(plugin: QuickTagPlugin, tags: string[]){
 	if (tags.length > 1){
 		// bail, we don't want to store multiple tags in this setting
 		return
 	}
+
+	if (modal_selection_is_special(tags[0])){
+		// bail, we don't want to update if a stash was added or a special command was run
+		return
+	}
+
+	console.log("updating recently used tag") // TODO: remove debugging
+	console.log(tags) // TODO: remove debugging
 
 	let tag = tags[0]
 	plugin.settings.last_used_tag = tag
@@ -822,7 +838,6 @@ async function update_last_used_tag(plugin: QuickTagPlugin, tags: string[]){
 		}
 	})
 }
-
 
 function modal_selection_is_special(str: string): boolean{
 	return SPECIAL_COMMANDS.includes(str) || modal_selection_is_a_stash(str)

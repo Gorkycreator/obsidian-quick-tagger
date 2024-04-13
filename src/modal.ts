@@ -4,7 +4,6 @@ import { SPECIAL_COMMANDS } from "./constants"
 import { prep_clean_query } from "clean_inputs";
 import { RecursiveTagLoop, TagGatherer } from "tag_gatherers";
 import { modal_selection_is_special, parseModalTags, selectManyTags } from "utilities";
-import { modal_selection_is_a_stash } from "tag_stash";
 export { ConfirmModal, QuickTagSelector, QuickTagSelectorLoop }
 
 
