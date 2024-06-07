@@ -1,10 +1,13 @@
-import { Notice, Plugin, TFile, PluginSettingTab, Setting, Menu, setIcon, MenuItem } from 'obsidian';
+import { Notice, Plugin, PluginSettingTab, Setting, Menu, setIcon, ItemView, WorkspaceLeaf } from 'obsidian';
 import { dynamicToggleCommand, addTagsToActiveFileWithModal, toggleTagOnActive,
-	     selectTag, removeTagsFromActiveFileWithModal, constructTaggerContextMenu,
-		 showStatusBarMenu, addTagsToActiveFileWithLoopingModal } from './utilities';
+	     selectTag, removeTagsFromActiveFileWithModal,
+		 showStatusBarMenu, set_up_command_pallet, set_up_menu_commands } from './utilities';
 import { NonStarredTags } from './tag_gatherers';
-import { onlyTaggableFiles } from './file_filters';
 import { set_up_stashed_tags } from './tag_stash';
+import { MultiTagSelectModal } from 'modal';
+
+
+const TAG_STASH_VIEW = "tag-stash-view"
 
 
 /** interface for starred tag settings
@@ -57,9 +60,11 @@ export default class QuickTagPlugin extends Plugin {
 	_statusBarItem: HTMLElement
 	_statusBarItemMenu: Menu
 	_statusBarStarredTags: HTMLElement[]
+	_tagStashListeners: Function[]
 
 	async onload() {
 		await this.loadSettings();
+		this._tagStashListeners = []
 		
 		// Add Dynamic commands/status bar buttons
 		let starredTags = this.settings.priorityTags
@@ -71,7 +76,6 @@ export default class QuickTagPlugin extends Plugin {
 
 		set_up_stashed_tags(this)
 		this.setupStatusBar();
-
 		this._statusBarStarredTags = new Array
 		this.redrawStatusBar()
 
@@ -84,89 +88,30 @@ export default class QuickTagPlugin extends Plugin {
 			removeTagsFromActiveFileWithModal(this)
 		});
 
+		set_up_command_pallet(this)
+		set_up_menu_commands(this)
 
-		// Command Pallet Commands
+		// tag stash view
+		this.registerView(
+			TAG_STASH_VIEW,
+			(leaf) => new TagStash(leaf, this)
+		)
+
 		this.addCommand({
-			id: 'quick-add-tag',
-			name: 'Add tag(s)',
-			callback: () => {
-				addTagsToActiveFileWithModal(this)
-			}
+			id: 'open-tag-stash',
+			name: 'Open tag stash panel',
+			callback: async () => {this.activateTagStash()}
 		});
 
-		this.addCommand({
-			id: 'quick-add-tag-loop',
-			name: 'Add tag(s) with looping modal',
-			callback: () => {
-				addTagsToActiveFileWithLoopingModal(this)
-			}
-		})
 
-		this.addCommand({
-			id: 'quick-remove-tag',
-			name: 'Remove tag',
-			callback: () => {
-				removeTagsFromActiveFileWithModal(this)
-			}
-		});
-
-		this.addCommand({
-			id: 'repeat-last-tag',
-			name: `Toggle recently used tag (none)`,
-			callback: () => {
-				new Notice("ERROR: No recent tag, please assign a tag with Quick Tagger before using this command")
-			}
-		})
-
-		// Menu commands
-		this.registerEvent(  // context menu when multiple items are selected in the file browser
-			this.app.workspace.on("files-menu", (menu: Menu, files: TFile[]) => {
-				files = onlyTaggableFiles(files)
-				if(files.length < 1){return}
-				constructTaggerContextMenu(menu, files, this)
-
-				
-			})
-		)
-		
-		this.registerEvent(  // context menu when right clicking on a file (file browser, active tab header, )
-			this.app.workspace.on("file-menu", (menu: Menu, file: TFile) => {
-				let files = onlyTaggableFiles([file])
-				if(files.length < 1){return}
-				constructTaggerContextMenu(menu, files, this)
-			})
+		this.registerEvent(
+			this.app.vault.on('tag-stash-add', this.addToTagStash.bind(this))
 		)
 
-		this.registerEvent(  // ... menu in search results window
-			this.app.workspace.on("search:results-menu", (menu: Menu, leaf: any) => {
-				let files = [] as TFile[]
-				leaf.dom.vChildren.children.map((e: any) => e.file)  // TODO: there must be a better way to do this!
-				files = onlyTaggableFiles(files)
-				if(files.length < 1){return}
-				constructTaggerContextMenu(menu, files, this)
-			})
+		this.registerEvent(
+			this.app.vault.on('tag-stash-remove', this.removeFromTagStash.bind(this))
 		)
 
-		this.registerEvent(  // context menu when right-clicking content in edit mode.
-			this.app.workspace.on('editor-menu', (menu: Menu, leaf: any) => {
-				// TODO: figure out how to get files from the selection.
-				// TODO: de-duplicate menu entries when right clicking on a link in edit mode.
-				menu.addItem((item) => {
-					item
-					  .setTitle("testing")
-					  .setIcon("tag")
-				})
-			})
-		)
-
-		this.registerEvent(  // `v` menu in the tab header
-			this.app.workspace.on('tab-group-menu', (menu: Menu, group: any) => {
-				let files = [] as TFile[]
-				group.children.forEach((tab: any) => files.push(tab.view.file))
-				files = onlyTaggableFiles(files)
-				constructTaggerContextMenu(menu, files, this)
-			})
-		)
 
 		// This adds a settings tab so the user can configure letious aspects of the plugin
 		this.addSettingTab(new QuickTagSettingTab(this));
@@ -179,6 +124,47 @@ export default class QuickTagPlugin extends Plugin {
 
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
 		// this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+	}
+
+	async addToTagStash(tags: string[]) {
+		console.log("UPDATING TAG STASH")
+		console.log(tags)
+		console.log(this)
+
+		tags.forEach((tag) => {
+			this.settings.tag_stash.push(tag)
+		})
+		await this.saveSettings()
+		this.update_stash_listeners()
+		new Notice(`${tags} added to stash`)
+	}
+
+	async removeFromTagStash(tags: string[]){
+		if (tags[0] == "REMOVE ALL"){
+			console.log("removing all tags from stash.....")
+			this.settings.tag_stash = new Array
+		} else {
+			let tag_array: string[] = []
+			this.settings.tag_stash.forEach((tag) => {
+				if (!tags.contains(tag)){
+					tag_array.push(tag)
+				}
+			}
+			)
+			this.settings.tag_stash = tag_array
+		}
+		await this.saveSettings()
+		this.update_stash_listeners()
+	}
+
+	async update_stash_listeners(){
+		for (let i = 0; i < this._tagStashListeners.length; i++){
+			this._tagStashListeners[i](this.settings.tag_stash)
+		}
+	}
+
+	add_tag_stash_listener(f: Function){
+		this._tagStashListeners.push(f)
 	}
 
 	async onunload() {
@@ -232,6 +218,22 @@ export default class QuickTagPlugin extends Plugin {
 			}
 		}
 	}
+
+	async activateTagStash(){
+		const { workspace } = this.app
+		
+		let leaf: WorkspaceLeaf | null = null;
+		const leaves = workspace.getLeavesOfType(TAG_STASH_VIEW);
+
+		if (leaves.length > 0){
+			leaf = leaves[0]
+		} else {
+			leaf = workspace.getRightLeaf(false)
+			await leaf.setViewState({type: TAG_STASH_VIEW, active: true})
+		}
+
+		workspace.revealLeaf(leaf)
+	}
 }
 
 
@@ -251,10 +253,6 @@ class QuickTagSettingTab extends PluginSettingTab {
 		const {containerEl} = this;
 
 		containerEl.empty();
-
-		// Style guide says not to use a main heading
-		// https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines#Only%20use%20headings%20under%20settings%20if%20you%20have%20more%20than%20one%20section.
-		// containerEl.createEl('h2', {text: 'Quick Tagger Settings'});
 
 		new Setting(containerEl)
 			.setName('Use all tags')
@@ -449,5 +447,66 @@ class QuickTagSettingTab extends PluginSettingTab {
 					});
 				s.nameEl.createEl('div', { text: tag.tag_value })
 		})
+	}
+}
+
+
+/** Class for Tag Stash panel
+ * 
+ */
+class TagStash extends ItemView {
+	plugin: QuickTagPlugin
+	input_box: MultiTagSelectModal
+
+
+	constructor(leaf: WorkspaceLeaf, plugin: QuickTagPlugin) {
+		super(leaf)
+		this.plugin = plugin
+	}
+
+	getDisplayText(): string {
+		return "Tag stash"
+	}
+
+	getViewType(): string {
+		return TAG_STASH_VIEW
+	}
+	
+	async onOpen(){
+		const container = this.containerEl.children[1]
+		container.empty()
+
+		this.input_box = new MultiTagSelectModal(container.createEl('div'), this.plugin)
+		
+		let view = this
+		this.input_box.update_hook = function() {
+			// TODO: trigger event to update stash
+			let current_tags = this.get_tags()
+			let setting_tags = view.plugin.settings.tag_stash
+
+			let update_tags = current_tags.filter((tag: string) => !setting_tags.includes(tag))
+			let remove_tags = setting_tags.filter((tag: string) => !current_tags.includes(tag))
+			
+			if (update_tags.length > 0){
+				console.log('adding tags')
+				view.plugin.app.vault.trigger('tag-stash-add', update_tags, view.plugin)
+			}
+
+			if (remove_tags.length > 0){
+				console.log("removing tags")
+				console.log(remove_tags)
+				view.plugin.app.vault.trigger('tag-stash-remove', remove_tags, view.plugin)
+			}
+		}
+
+		this.plugin.add_tag_stash_listener(this.input_box.inject_new_data_hook.bind(this.input_box))
+	}
+
+	async onClose() {
+		// No cleanup necessary
+	}
+
+	getIcon(): string {
+		return "squirrel"
 	}
 }

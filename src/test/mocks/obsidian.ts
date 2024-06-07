@@ -17,7 +17,10 @@ class App {
 }
 
 class TFile {
-
+    text = "sample_text"
+    get_text() {
+        return this.text
+    }
 }
 
 class Menu {

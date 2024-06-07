@@ -15,12 +15,15 @@ const modifier_map: ModMap = {
 }
 
 
-export function prep_clean_query(original_query: string, plugin: QuickTagPlugin){
+export function prep_clean_query(original_query: string, plugin: QuickTagPlugin | null = null){
     let fixed_query = original_query
 
-    let setting_value: string = plugin.settings.preffered_casing
-    let modifier_func = modifier_map[setting_value as string]
-
+    let modifier_func = null
+    if (plugin){
+        let setting_value: string = plugin.settings.preffered_casing
+        modifier_func = modifier_map[setting_value as string]
+    }
+    
     if (modifier_func){
         fixed_query = modifier_func(fixed_query)
     }

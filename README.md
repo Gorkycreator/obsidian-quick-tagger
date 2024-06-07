@@ -5,13 +5,13 @@ This is a plugin for [Obsidian](https://obsidian.md) that adds commands and a GU
 Originally developed to improve my personal workflow, it's very handy in conjunction with [Obsidian Commander](https://github.com/phibr0/obsidian-commander).
 
 ## Features
-- Add tags in bulk (see Bulk Tagging section for details).
+- [Add tags in bulk](https://github.com/Gorkycreator/obsidian-quick-tagger#bulk-tagging)
 - Right-click on a file to tag it; works in the graph view, note context menu, and right-clicking on links.
 - Hotkeyable Command Pallete entry to add or remove tags. Combine with [Advanced URI](https://github.com/Vinzent03/obsidian-advanced-uri) for use with peripherals like the [Stream Deck](https://www.elgato.com/us/en/s/welcome-to-stream-deck)
 - Configurable [Starred Tags](https://github.com/Gorkycreator/obsidian-quick-tagger#starred-tags) for quicker access to your favorites.
 - Ribbon icons to add or remove a tag from the current note[^1].
 
-[^1]: Unfortunately, there's not an easy way to get the currently selected files from the ribbon icon, so bulk tagging is limited to the right-click context menu for now.
+[^1]: Unfortunately, there's not an easy way to get the currently selected files in the file tree via the ribbon commands, so bulk tagging is limited to the right-click context menu for now.
 
 ## Demo
 ![demo](images/quick_tagger_demo.gif)
@@ -38,6 +38,14 @@ Starred tags have the following features, each independently configurable:
 
 ![starred-tag-demo](images/starred-tag-demo.gif)
 
+#### Tag Stash (copy/paste sets of tags)
+The Tag Stash is a temporary workbench for holding sets of tags that you can apply to notes. The most common use is to copy a set of tags from one note and paste them on another, but you can also modify the tags from the stash directly. This is useful if you are randomly sifting through notes and find your self applying the same set of tags repeatedly. The stash can be applied to _replace_ a note's tags or _merge_ with the note' existing tags, depending on the comnmand you use. Copying tags from a note will always replace your stash.
+
+Your stash can be viewed and modified by clicking the Quick Tagger status bar icon or utilizing the command pallet.
+
+![tag-stash-demo](images/tag-stash-demo.gif)
+
+
 ## Disclaimer
 This plugin is provided as-is, use at your own risk. I've tested it personally and use it on my vault but I can't confirm it's foolproof in every situation.
 
@@ -55,6 +63,7 @@ This plugin does not keep track of changes in an undo/redo queue, please be awar
 - [x] Toggle recently used tag command
 - [x] Dialog to add many tags to notes
 - [x] Tag Stashing
+- [ ] Save Tag Stashes
 - [ ] Tag chains (cycle through a list of tags)
 - [ ] Dialog to convert tags to linklist items (and vice versa)[^2]
 
@@ -66,7 +75,7 @@ Quick Tagger is available in the Obsidian community plugins, click [here](obsidi
 
 ### Manually installing the plugin
 
-Copy `main.js` and `manifest.json` to your vault `VaultFolder/.obsidian/plugins/obsidian-quick-tagger/`.
+Copy `main.js` and `manifest.json` from the [latest release](https://github.com/Gorkycreator/obsidian-quick-tagger/releases/latest) to your vault `VaultFolder/.obsidian/plugins/obsidian-quick-tagger/`.
 
 
 ## Development notes
