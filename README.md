@@ -86,3 +86,4 @@ The [official documentation on tags](https://help.obsidian.md/Editing+and+format
 - [QuickAdd](https://github.com/chhoumann/quickadd) for examples of how to add and remove commands.
 - [Toggl Track](https://github.com/mcndt/obsidian-toggl-integration) and [Spaced Repetition](https://github.com/st3v3nmw/obsidian-spaced-repetition) for examples of working with status bar elements.
 - [Better Reading Mode](https://github.com/Quorafind/Obsidian-Better-Reading-Mode/tree/master) for an example of adding the status bar pop-up menu.
+- [Cross-link between notes](https://github.com/mrjackphil/obsidian-crosslink-between-notes/) for code to get notes from the selected text. (and [Open selected links](https://github.com/autohub7/obsidian-open-selected-links) for drawing my attention to it.)

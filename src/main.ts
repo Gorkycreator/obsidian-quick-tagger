@@ -451,6 +451,8 @@ class QuickTagSettingTab extends PluginSettingTab {
 }
 
 
+// region Tag Stash Panel
+
 /** Class for Tag Stash panel
  * 
  */

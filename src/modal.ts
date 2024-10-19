@@ -1,6 +1,6 @@
 import { App, FuzzySuggestModal, Modal, Setting, Notice, TFile, renderResults, prepareFuzzySearch, FuzzyMatch, fuzzySearch, prepareQuery, setIcon, Scope, Plugin, KeymapContext, KeymapEventHandler, KeymapEventListener, getAllTags } from "obsidian";
 import QuickTagPlugin, {QuickTaggerSettings} from "./main"
-import { SPECIAL_COMMANDS } from "./constants"
+import { KNOWN_BAD_CHARACTERS } from "./constants"
 import { prep_clean_query } from "clean_inputs";
 import { NonStashedTags, RecursiveTagLoop, TagGatherer } from "tag_gatherers";
 import { modal_selection_is_special, parseModalTags, selectManyTags } from "utilities";
@@ -195,6 +195,9 @@ class ConfirmModal extends Modal {
 }
 
 
+
+// region Tag Stash Panel
+
 class MultiTagSelectModal {
     // TODO: Add selector dropdown feature
     rootEl: HTMLElement
@@ -204,6 +207,7 @@ class MultiTagSelectModal {
     editing: boolean
     suggester: FloatingSuggester | null
     plugin: QuickTagPlugin
+    _saved_focus: number | null
     
 
     constructor(parent: HTMLElement, plugin: QuickTagPlugin){
@@ -219,9 +223,11 @@ class MultiTagSelectModal {
                                   .createDiv({cls: 'metadata-property-value'})
                                   .createDiv({cls: "multi-select-container"})
         this.inputEl = this._createInputEl()
-
+        
+        // When Modal is focused, add key commands
         this.inputEl.addEventListener('keydown', (event) => {
-            console.log(event)
+            console.log(this.inputEl.getText())
+            console.log(event)  // TODO: remove debug
             if (!event.isComposing){
                 if ('Enter' === event.key && this.inputEl.getText().length > 0) {
                     event.preventDefault()
@@ -232,6 +238,7 @@ class MultiTagSelectModal {
                 else if ('Enter' === event.key && this.inputEl.getText().length === 0){
                     // TODO: after implementing tag suggestor, reveiew whether this should be removed
                     event.preventDefault()
+                    // TODO: Check for duplicates and reject
                     this.inputEl.innerText = ''
                     this.inputEl.focus()
                 }
@@ -250,9 +257,30 @@ class MultiTagSelectModal {
                         }
                     }
                 }
+
+                // Tags cannot start as a number
+                else if (0 === this.inputEl.getText().length && !isNaN(Number(event.key))){
+                    event.preventDefault()
+                }
+
+                // Tags cannot include these characters
+                else if (KNOWN_BAD_CHARACTERS.includes(event.key)){
+                    console.log("BAD KEYS")
+                    event.preventDefault()
+                }
+
+                // Tags cannot have consecutive slashes
+                else if (event.key == "/"){
+                    let current_input = this.inputEl.getText()
+                    let previous_char = current_input[current_input.length - 1]
+                    if (previous_char == "/"){
+                        event.preventDefault()
+                    }
+                }
             }
         })
 
+        // When clicking away from modal, save input
         this.inputEl.addEventListener('blur', (event) => {
             let tmp_text = this.inputEl.getText()
             if (tmp_text) {
@@ -263,6 +291,7 @@ class MultiTagSelectModal {
             this.closeSuggester()
         })
         
+        // Redirect focus to input box
         this.rootEl.addEventListener('click', (function(pointer_event) {
             if(pointer_event.targetNode === this_selector.rootEl){
                 this_selector.inputEl.focus()
@@ -307,6 +336,7 @@ class MultiTagSelectModal {
         })
         let this_selector = this
         input.addEventListener('input', (function(t){
+            // TODO: Reject duplicates?
             console.log(t)
             this_selector.closeSuggester()
         }))
@@ -323,8 +353,14 @@ class MultiTagSelectModal {
         }
     }
 
+    refocus(){
+        if (this._saved_focus !== null){
+            this.focusElement(this._saved_focus)
+        }
+        this._saved_focus = null
+    }
+
     renderValues(){
-        let this_selector = this
         this.elements = []  // empty the display
         for (let i = 0; i < this.values.length; i++){
             let this_tag = this.values[i]
@@ -354,12 +390,14 @@ class MultiTagSelectModal {
                 else if ('Backspace' === event.key) {
                     event.preventDefault()
                     this.removeElement(this_tag)
-                    this.focusElement(i-1)
+                    this._saved_focus = i-1
+                    this.inputEl.trigger('input')
                 }
                 else if ('Delete' === event.key) {
                     event.preventDefault()
                     this.removeElement(this_tag)
-                    this.focusElement(i)
+                    this._saved_focus = i
+                    this.inputEl.trigger('input')
                 }
                 else if ('ArrowUp' === event.key) {
                     event.preventDefault()
@@ -385,8 +423,10 @@ class MultiTagSelectModal {
             remove_button.addEventListener('mousedown', (e) => {return e.preventDefault()} )
             remove_button.addEventListener('click', (e) => {this.removeElement(this_tag); this.inputEl.trigger('input')})
         }
+        let active_element = document.activeElement
         this.rootEl.setChildrenInPlace(this.elements.concat([this.inputEl]))
         this.inputEl.setAttr('placeholder', this.elements.length > 0 ? "" : "None")
+        this.refocus()  // setChildrenInPlace messes with the focus, so pull it back here.
     }
 
     editElement(index: number){
@@ -541,30 +581,10 @@ class FloatingSuggester {
         let y = bounding.bottom
         let max = this.plugin.app.workspace.containerEl.getBoundingClientRect().right
         let width = this.suggestEl.getBoundingClientRect().width
-        console.log("sizes.........")
-        console.log(width)
-        console.log(x)
-        console.log(max)
         if (x + width + 10 > max){
-            console.log("bumping back onto screen")
             x = max - width - 10
         }
-        console.log(x, y)
         this.suggestEl.setAttr('style', `left: ${x}px; top: ${y}px;`)
-    }
-
-    reposition(e){
-        let n = {gap: 5, parentOverlap: false}
-        if (!e.contains(this.suggestEl)){
-            return null
-        }
-        let o = n
-        for (let i, r=e.doc.createNodeIterator(e, NodeFilter.SHOW_TEXT); 
-             (i = r.nextNode()) && this.suggestEl !== i;
-            ) {
-                o += i.textContent.length
-        }
-        return o
     }
 
     selectSuggestion(value: string, event: KeyboardEvent){
@@ -572,12 +592,13 @@ class FloatingSuggester {
         console.log(value)
     }
 
-    onSelectedChange(index: number, event: KeyboardEvent){
-
+    onSelectedChange(value: number){
+        console.log("this was selected................")
+        console.log(value)
     }
 
     renderSuggestion(value: string, element: HTMLElement){
-        element.createSpan({text: value})
+        let test = element.createSpan({text: value})
     }
 }
 
@@ -599,9 +620,9 @@ class Suggester {
         this.suggestions = []
         this.selectedItem = 0
 
-        this.containerEl.on('click', '.sugtestion-item', this.onSuggestionClick.bind(this))
+        this.containerEl.addEventListener('click', this.onSuggestionClick.bind(this))
         this.containerEl.on('auxclick', '.sugtestion-item', this.onSuggestionClick.bind(this))
-        this.containerEl.on('mousemove', '.sugtestion-item', this.onSuggestionMouseover.bind(this))
+        this.containerEl.on('mouseover', '.suggestion-item', this.onSuggestionMouseover.bind(this))
 
         this.moveUp = this._moveUp.bind(this)
         this.moveDown = this._moveDown.bind(this)
@@ -628,14 +649,16 @@ class Suggester {
         }
     }
 
-    onSuggestionClick(event: KeyboardEvent, ctx: HTMLElement){
+    onSuggestionClick(event: MouseEvent, ctx: HTMLElement){
+        console.log("HELOOOOOOOOOOOOOOOOOOOO")
         event.preventDefault()
         let index = this.suggestions.indexOf(ctx)
         this.setSelectedItem(index, event)
         this.useSelectedItem(event)
     }
 
-    onSuggestionMouseover(event: KeyboardEvent, ctx: HTMLElement){
+    onSuggestionMouseover(event: MouseEvent, ctx: HTMLElement){
+        console.log(event)
         let index = this.suggestions.indexOf(ctx)
         console.log('new item hovered: ' + index)
         this.setSelectedItem(index, event)
@@ -651,7 +674,7 @@ class Suggester {
         }
     }
 
-    setSelectedItem(index: number, event: KeyboardEvent | null){
+    setSelectedItem(index: number, event: KeyboardEvent | MouseEvent | null){
         let suggest = this.suggestions
         if (suggest.length !== 0){
             if (index < 0){
@@ -665,7 +688,7 @@ class Suggester {
         this.forceSetSelectedItem(index, event)
     }
 
-    forceSetSelectedItem(index: number, event: KeyboardEvent | null){
+    forceSetSelectedItem(index: number, event: KeyboardEvent | MouseEvent | null){
         let suggest = this.suggestions
         let active = suggest[this.selectedItem]
         if (active){
@@ -679,7 +702,7 @@ class Suggester {
         if (event && event.instanceOf(KeyboardEvent)){
             newly_active.scrollIntoView({block: 'nearest'})
         }
-        this.chooser.onSelectedChange.call(this.chooser, this.values[index], event)
+        this.chooser.onSelectedChange.call(this.chooser, this.values[index])
     }
 
     setSuggestions(new_suggestions: string[]){

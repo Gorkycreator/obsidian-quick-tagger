@@ -1,4 +1,4 @@
-import{ Notice, App, TFile, Menu, Component, MenuItem, parseFrontMatterTags } from 'obsidian'
+import{ Notice, App, TFile, Menu, Component, MenuItem, parseFrontMatterTags, MarkdownView, Editor, MarkdownFileInfo } from 'obsidian'
 import QuickTagPlugin, { QuickTaggerSettings, StarredTag } from "./main"
 import { ConfirmModal, QuickTagSelector, QuickTagSelectorLoop } from './modal'
 import { AddTagList, TagGatherer, TagsOnFiles } from './tag_gatherers'
@@ -40,7 +40,6 @@ function getTagsFromFile(plugin: QuickTagPlugin, file: TFile){
 			existing_tags.map((e) => e.replace('#', '')).filter((e) => e).map((e) => '#' + e)
 		}
 	}
-	console.log(`tags_in_func: ${existing_tags}`)  // TODO: remove debugging
 	return existing_tags
 }
 
@@ -399,7 +398,7 @@ function toggleTagOnFile(plugin: QuickTagPlugin, file: TFile[], tags: string[]){
 }
 
 
-// region Clean notes and input data
+// region Clean notes/input
 
 /** Fix problems with processFrontMatter.
  * processFrontMatter does not work if there are newlines before the metadata
@@ -540,7 +539,8 @@ async function _apply_bulk_changes_wrapper(files:TFile[], tags:string[], plugin:
 	})
 	let failed_files = (await results.finally()).failed
 	
-	if(failed_files){
+	if(failed_files.length > 0){
+		console.log(failed_files)
 		console.log("Could not apply tags to: " + failed_files.join("\n\t- ") + "\nThis most likely means they have invalid YAML frotmatter.")
 		new Notice("Quick Tagger Error: Some files were not able to be proccessed. See console for details.")
 	}
@@ -612,6 +612,45 @@ async function update_last_used_tag(plugin: QuickTagPlugin, tags: string[]){
 	})
 }
 
+// https://github.com/mrjackphil/obsidian-crosslink-between-notes/blob/1999fb8df79abdd5b35a8d088d501e3608f65d59/main.ts#L106
+function getFilesFromLineOrSelection(view: MarkdownView, plugin: QuickTagPlugin): TFile[] {
+	const cm = view.editor
+	const cursor = cm.getCursor()
+	const selectedRange = cm.getSelection()
+	const line = selectedRange || cm.getLine(cursor.line)
+
+	const regexpWiki = /\[\[.+?]]/gi
+	const linksWiki = line.match(regexpWiki) || []
+	const ar = [linksWiki].filter(e => e.length)
+
+	return Array.from(new Set(ar.flat().map((lnk) => {
+		const wikiName = lnk
+			.replace(/(\[\[|]])/g, '')
+			.replace(/\|.+/, '')
+			.replace(/#.+/, '')
+		
+		return getFilesByName(wikiName, plugin)
+	})))
+}
+
+
+function getFilesByName(name: string | string[], plugin: QuickTagPlugin) {
+	const files = plugin.app.vault.getFiles()
+
+	if (Array.isArray(name)) {
+		return files.filter(e => name.includes(e.name)
+			|| name.includes((e.path))
+			|| name.includes(e.basename)
+		)[0]
+	}
+
+	return files.filter(e => e.name === name
+		|| e.path === name
+		|| e.basename === name
+	)[0]
+}
+
+
 // region Modal Utilities
 
 function modal_selection_is_special(str: string): boolean{
@@ -676,7 +715,7 @@ function wordWrap(str: string, max: number, br: string = '\n'){
 }
 
 
-// region Context Menu Utilities
+// region Ctxt Menu Utilities
 
 function set_up_menu_commands(plugin: QuickTagPlugin){
 	plugin.registerEvent(  // context menu when multiple items are selected in the file browser
@@ -689,17 +728,8 @@ function set_up_menu_commands(plugin: QuickTagPlugin){
 		})
 	)
 
-	plugin.registerEvent(  // context menu when right clicking on a file (file browser, active tab header, )
-		plugin.app.workspace.on("file-menu", (menu: Menu, file: TFile) => {
-			let files = onlyTaggableFiles([file])
-			if(files.length < 1){return}
-			constructTaggerContextMenu(menu, files, plugin)
-		})
-	)
-
 	plugin.registerEvent(  // ... menu in search results window
 		plugin.app.workspace.on("search:results-menu", (menu: Menu, leaf: any) => {
-			console.log("hello")  // TODO: remove debug
 			let files = [] as TFile[]
 			files = leaf.dom.vChildren.children.map((e: any) => e.file)  // TODO: there must be a better way to do this!
 			
@@ -708,23 +738,32 @@ function set_up_menu_commands(plugin: QuickTagPlugin){
 			// retrieval implementation, as I found my mistake with the vChildren route and this didn't look any more promising.
 			// leaf.dom.resultDomLookup.values().next().value.file
 
-			console.log(files) // TODO: remove debug
 			files = onlyTaggableFiles(files)
-			console.log(files.length) // TODO: remove debug
+			if(files.length < 1){return}
+			constructTaggerContextMenu(menu, files, plugin)
+		})
+	)
+
+	plugin.registerEvent(  // context menu when right clicking on a file (file browser, active tab header, )
+		plugin.app.workspace.on("file-menu", (menu: Menu, file: TFile) => {
+			let files = onlyTaggableFiles([file])
 			if(files.length < 1){return}
 			constructTaggerContextMenu(menu, files, plugin)
 		})
 	)
 
 	plugin.registerEvent(  // context menu when right-clicking content in edit mode.
-		plugin.app.workspace.on('editor-menu', (menu: Menu, leaf: any) => {
-			// TODO: figure out how to get files from the selection.
-			// TODO: de-duplicate menu entries when right clicking on a link in edit mode.
-			menu.addItem((item) => {
-				item
-				.setTitle("testing")
-				.setIcon("tag")
+		plugin.app.workspace.on('editor-menu', (menu: Menu, editor: Editor, view: MarkdownView) => {
+
+			// the file-menu event and editor-menu event are both triggered when right-clicking on a link in
+			// edit mode. The file-menu is always built first, so filter out the menu item to deduplicate it.
+			menu.items = menu.items.filter(item =>{
+				return item.dom.innerText !== "Quick Tag"
 			})
+
+			let files = getFilesFromLineOrSelection(view, plugin)
+			files = onlyTaggableFiles(files)
+			constructTaggerContextMenu(menu, files, plugin)
 		})
 	)
 
@@ -738,11 +777,14 @@ function set_up_menu_commands(plugin: QuickTagPlugin){
 	)
 }
 
-
 /** Add context menu items to a given menu
  * 
  */
 function constructTaggerContextMenu(menu: Menu, files: TFile[], plugin: QuickTagPlugin, section="action"){
+	if (files.length < 1) {
+		return
+	}
+	
 	menu.addItem((item) => {
 		let subMenu = item
 		  .setTitle("Quick Tag")
