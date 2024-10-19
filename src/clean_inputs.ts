@@ -15,12 +15,15 @@ const modifier_map: ModMap = {
 }
 
 
-export function prep_clean_query(original_query: string, plugin: QuickTagPlugin){
+export function prep_clean_query(original_query: string, plugin: QuickTagPlugin | null = null){
     let fixed_query = original_query
 
-    let setting_value: string = plugin.settings.preffered_casing
-    let modifier_func = modifier_map[setting_value as string]
-
+    let modifier_func = null
+    if (plugin){
+        let setting_value: string = plugin.settings.preffered_casing
+        modifier_func = modifier_map[setting_value as string]
+    }
+    
     if (modifier_func){
         fixed_query = modifier_func(fixed_query)
     }
@@ -29,6 +32,10 @@ export function prep_clean_query(original_query: string, plugin: QuickTagPlugin)
     for(const index in KNOWN_BAD_CHARACTERS){
         fixed_query = fixed_query.replaceAll(KNOWN_BAD_CHARACTERS[index], '')
     }
+
+    // forward-slash characters are for tag hierarchy, they cannot be consecutive
+    const slash_regex = /\/{2,}/gi
+    fixed_query = fixed_query.replace(slash_regex, "/")
 
     return fixed_query
 }

@@ -1,23 +1,25 @@
-import{ Notice, App, TFile, Menu } from 'obsidian'
-import QuickTagPlugin, { StarredTag } from "./main"
-import { ConfirmModal, QuickTagSelector } from './modal'
+import{ Notice, App, TFile, Menu, Component, MenuItem, parseFrontMatterTags, MarkdownView, Editor, MarkdownFileInfo } from 'obsidian'
+import QuickTagPlugin, { QuickTaggerSettings, StarredTag } from "./main"
+import { ConfirmModal, QuickTagSelector, QuickTagSelectorLoop } from './modal'
 import { AddTagList, TagGatherer, TagsOnFiles } from './tag_gatherers'
-import { filterTag, getFilteredWithTag, getFilteredWithoutTag } from './file_filters'
-import { WOAH_LOTS_OF_FILES } from './constants'
-export { selectTag, addTagsWithModal, addTagWithModal, removeTagWithModal, removeTagsWithModal,
-	toggleTagOnActive, toggleTagOnFile, dynamicToggleCommand, dynamicAddMenuItems }
-export { _formatHashTag, _addFrontMatterTag, _cleanNoteContent, _getRemovalProcessor, 
-	_removeAllFrontMatterTags, _removeFrontMatterTag, _conformToArray }
+import { filterTags, getFilteredWithTags, getFilteredWithoutTags, onlyTaggableFiles } from './file_filters'
+import { SPECIAL_COMMANDS, TAG_KEY, WOAH_LOTS_OF_FILES, TAG_CLEANUP_KEYS } from './constants'
+import { addCopyPasteMenuItems, modal_selection_is_a_stash, populateStatusBarTagStashIndicator } from "./tag_stash"
+export { selectTag, addTagsToActiveFileWithModal, removeTagsFromActiveFileWithModal,
+	toggleTagOnActive, dynamicToggleCommand, wordWrap, selectManyTags, modal_selection_is_special, parseModalTags, getTagsFromFile,
+    getActiveFile, addTagsDirectly, removeAllTagsDirectly, set_up_command_pallet, set_up_menu_commands }
+export { _formatHashTag, _addFrontMatterTags, _cleanNoteContent, _getRemovalProcessor, _apply_bulk_changes,
+	_removeAllFrontMatterTags, _removeFrontMatterTag, _conformToArray, showStatusBarMenu }
 
-const tag_key = 'tags'
-const tag_cleanup = ['tag', 'Tag', 'Tags']
 
+
+// region Retrieving Tags
 
 /** Gets the active file
  * 
  * @returns Tfile array
  */
-function _getActiveFile() {
+function getActiveFile() {
 	let thisFile = this.app.workspace.getActiveFile()
 	if(thisFile instanceof TFile) {
 		return [thisFile]
@@ -28,15 +30,101 @@ function _getActiveFile() {
 }
 
 
+function getTagsFromFile(plugin: QuickTagPlugin, file: TFile){
+	let cache = plugin.app.metadataCache.getFileCache(file)
+	let existing_tags: string[] = []
+	if (cache){
+		let parsed_frontmatter = parseFrontMatterTags(cache.frontmatter)
+		existing_tags = parsed_frontmatter ? parsed_frontmatter : []
+		if(existing_tags.length > 0){
+			existing_tags.map((e) => e.replace('#', '')).filter((e) => e).map((e) => '#' + e)
+		}
+	}
+	return existing_tags
+}
+
+// region Tag Selection
+/** Spawn a selection dialog and return a tag once selected
+ * 
+ * @param plugin the main Quick-Tagger plugin
+ * @param gatherer a function that returns the list of tags to display in the QuickTagSelector
+ * @param notes notes that this action will affect
+ * @returns promise for a tag (string) selected from the modal
+ */
+function selectTag(plugin: QuickTagPlugin, gatherer?: TagGatherer, notes?: TFile[]): Promise<string>{
+	let active_gatherer = gatherer ? gatherer : new AddTagList
+	let active_notes = notes ? notes : new Array
+	return new Promise((resolve) => {
+		new QuickTagSelector(plugin, active_gatherer, (result: string) => {resolve(result)}, active_notes).open();
+	})
+}
+
+
+/**
+ * 
+ */
+function selectManyTags(plugin: QuickTagPlugin, context?: QuickTagSelectorLoop | null, gatherer?: TagGatherer, notes?: TFile[]): Promise<string[]>{
+	let active_gatherer = gatherer ? gatherer: new AddTagList
+	let active_notes = notes ? notes : new Array
+	return new Promise((resolve) => {
+		if (context){  // this is how we call the loping modal recursively. The first run will not have context, but subsequent callbacks of the QuickTagSelectorLoop will provide itself as context.
+			context.open()
+		} else {
+			new QuickTagSelectorLoop(plugin, active_gatherer, (result: string[]) => resolve(result), active_notes).open()
+		}
+	})
+}
+
+/** Spawn notification for user that tags were added/removed successfully
+ * 
+ * @param mode 
+ * @param tag 
+ * @param applicableFiles 
+ */
+function confirmationNotification(mode:string, tags:string[], applicableFiles: TFile[]){
+	let notes = applicableFiles.length > 1 ? applicableFiles.length + " notes" : applicableFiles[0].basename
+	let tofrom = mode == 'add' ? " added to " : " removed from "
+	let tag_text = tags.length == 1 ? tags[0] : tags.length.toString() + " tags"
+	if (tags[0] == "REMOVE ALL"){
+		new Notice("All tags removed from " + notes)
+	} else {
+		new Notice(tag_text + tofrom + notes)
+	}
+}
+
+
+/** Collect all recognized tag list variations into one key
+ * 
+ * @param yaml - a single yaml dict 
+ * @returns - a single modified yaml dict
+ */
+function _collectExistingTags(yml:any){
+	// make the desired key, if it does not exist
+	if (!yml.hasOwnProperty(TAG_KEY) || yml[TAG_KEY] === null){
+		yml[TAG_KEY] = new Array
+	} else {
+		// catch existing string formatting that works in obsidian, but not javascript
+		yml[TAG_KEY] = _conformToArray(yml[TAG_KEY])
+	}
+
+	yml = _emptyAlternateKeys(yml)
+	yml[TAG_KEY].map((tag: string) => _formatHashTag(tag))
+
+	return yml
+}
+
+
+// region Adding Tags
+
 /** Add a tag to a note
  * 
  * @param thisFile the file to edit
  * @param tag the tag to add
  */
-async function _addTag(thisFile: TFile, tag: string){
-	this.tag = _formatHashTag(tag)
+async function _addTags(thisFile: TFile, tags: string[]){
+	this.tags = tags.map((tag: string) => _formatHashTag(tag))
 	await _cleanFile(thisFile)
-	await this.app.fileManager.processFrontMatter(thisFile, _addFrontMatterTag.bind(this))
+	await this.app.fileManager.processFrontMatter(thisFile, _addFrontMatterTags.bind(this))
 }
 
 
@@ -44,21 +132,113 @@ async function _addTag(thisFile: TFile, tag: string){
  * 
  * @param frontmatter an object with a tags key
  */
-function _addFrontMatterTag(frontmatter: {tags: string[]}){
+function _addFrontMatterTags(frontmatter: {tags: string[]}){
+	console.log(frontmatter) // TODO: remove debug
 	frontmatter = _collectExistingTags(frontmatter);
-	frontmatter[tag_key] = frontmatter[tag_key].map((t:string) => _formatHashTag(t))
-	frontmatter[tag_key].push(this.tag)
+	console.log(frontmatter) // TODO: remove debug
+	frontmatter[TAG_KEY] = frontmatter[TAG_KEY].map((t:string) => _formatHashTag(t))
+	console.log(frontmatter) // TODO: remove debug
+
+	// https://www.peterbe.com/plog/merge-two-arrays-without-duplicates-in-javascript
+	let merged = [...new Set([...frontmatter[TAG_KEY], ...this.tags])]
+	console.log(merged) // TODO: remove debug
+
+	frontmatter[TAG_KEY] = merged
+	console.log(frontmatter) // TODO: remove debug
 }
 
+
+/** Loop over files and add tags
+ * 
+ * 
+ * @param files array of files to edit
+ * @param tag tag to add
+ * @param plugin a reference to the plugin (used to update status bar)
+ */
+async function _addTagsToMany(files:TFile[], tags:string[], plugin: QuickTagPlugin){
+	console.log("ADDING TAGS")
+	await _apply_bulk_changes_wrapper(files, tags, plugin, _addTags)
+}
+
+
+/** Add tags to files with appropriate warnings and notifications
+ * 
+ * @param plugin 
+ * @param files 
+ * @param tag 
+ * @returns 
+ */
+async function addTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tags: string[]){
+	let applicableFiles = getFilteredWithoutTags(files, tags)
+
+	if (applicableFiles.length == 0){
+		new Notice("No file tags to change!")
+		return
+	}
+
+	let confirm = await addDialogs('add', tags, files.length)
+
+	if (confirm){
+		_applyTagChanges(plugin, tags, applicableFiles, _addTagsToMany, 'add')
+	}
+}
+
+/** Convenience function to add tag directly to a note
+ *  
+ * @param plugin 
+ * @param tag 
+ */
+async function addTagsDirectlyToActive(plugin: QuickTagPlugin, tags: string[]){
+	let file = getActiveFile()
+	addTagsDirectly(plugin, file, tags)
+}
+
+
+/** Convenience function to call modal, warnings, add tags, and then confirmation
+ * 
+ * @param plugin 
+ * @param files 
+ */
+async function addTagsWithModal(plugin: QuickTagPlugin, files: TFile[]){
+	let tag = await selectTag(plugin, new AddTagList, files)
+	let tags = parseModalTags(tag)
+	addTagsDirectly(plugin, files, tags)
+}
+
+async function addManyTagsWithLoopModal(plugin: QuickTagPlugin, files: TFile[]){
+	let tags = await selectManyTags(plugin, null, new AddTagList, files)
+	let clean_tags: string[] = []
+	tags.forEach((t) => {
+		clean_tags = [...new Set([...clean_tags, ...parseModalTags(t)])]
+	})
+	addTagsDirectly(plugin, files, tags)
+}
+
+
+/** Convenience function to get active, then call tag selection dialog
+ * 
+ */
+async function addTagsToActiveFileWithModal(plugin: QuickTagPlugin){
+	let currentFile = getActiveFile()
+	addTagsWithModal(plugin, currentFile)
+}
+
+async function addTagsToActiveFileWithLoopingModal(plugin: QuickTagPlugin){
+	let currentFile = getActiveFile()
+	addManyTagsWithLoopModal(plugin, currentFile)
+}
+
+
+// region Removing Tags
 
 /** Remove a tag from a note
  * 
  * @param tag the tag to remove
  */
-async function _removeTag(thisFile: TFile, tag:string){
-	this.tag = _formatHashTag(tag)
+async function _removeTags(thisFile: TFile, tags: string[]){
+	this.tags = tags.map((tag) => _formatHashTag(tag))
 	await _cleanFile(thisFile)
-	let processor = _getRemovalProcessor(tag)
+	let processor = _getRemovalProcessor(tags)
 	await this.app.fileManager.processFrontMatter(thisFile, processor.bind(this))
 }
 
@@ -67,8 +247,8 @@ async function _removeTag(thisFile: TFile, tag:string){
  * @param tag 
  * @returns 
  */
-function _getRemovalProcessor(tag: string){
-	if (tag != "REMOVE ALL"){
+function _getRemovalProcessor(tags: string[]){
+	if (tags[0] != "REMOVE ALL"){
 		return _removeFrontMatterTag
 	} else {
 		console.log("removing all tags.....")
@@ -83,13 +263,9 @@ function _getRemovalProcessor(tag: string){
  */
 function _removeFrontMatterTag(frontmatter: {tags: string[]}) {
 	frontmatter = _collectExistingTags(frontmatter)
-	let tags = frontmatter[tag_key]
+	let tags = frontmatter[TAG_KEY]
 	tags = tags.map((t:string) => _formatHashTag(t))
-	let indx = tags.indexOf(this.tag, 0)
-	if (indx > -1){
-		tags.splice(indx, 1)
-	}
-	frontmatter[tag_key] = tags
+	frontmatter[TAG_KEY] = tags.filter((t) => {return !this.tags.contains(t)})
 }
 
 
@@ -97,9 +273,80 @@ function _removeFrontMatterTag(frontmatter: {tags: string[]}) {
  * 
  */
 function _removeAllFrontMatterTags(frontmatter: {tags: string[]}) {
-	frontmatter[tag_key] = []
+	frontmatter[TAG_KEY] = []
 }
 
+
+/** Loop over files and remove tags
+ * 
+ * @param files array of files to edit
+ * @param tag tag to remove
+ * @param plugin a reference to the plugin (used to update status bar)
+ */
+async function _removeTagsFromMany(files:TFile[], tags:string[], plugin: QuickTagPlugin){
+	console.log("REMOVING TAGS")
+	await _apply_bulk_changes_wrapper(files, tags, plugin, _removeTags)
+}
+
+
+/** Convenience function to remove tag directly from a note
+ * 
+ */
+async function removeTagsDirectlyFromActive(plugin: QuickTagPlugin, tags: string[]){
+	let file = getActiveFile()
+	removeTagsDirectly(plugin, file, tags)
+}
+
+
+async function removeAllTagsDirectly(plugin: QuickTagPlugin, files: TFile[]){
+	_applyTagChanges(plugin, ["REMOVE ALL"], files, _removeTagsFromMany, 'remove')
+}
+
+
+/** Remove tags from files with appropriate warnings and notifictions
+ * 
+ * @param plugin 
+ * @param files 
+ * @param tag 
+ * @returns 
+ */
+async function removeTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tags: string[]){
+	let applicableFiles = getFilteredWithTags(files, tags)
+
+	if (applicableFiles.length == 0){
+		new Notice("No file tags to change!")
+		return
+	}
+
+	let confirm = await addDialogs('remove', tags, applicableFiles.length)
+
+	if (confirm){
+		_applyTagChanges(plugin, tags, applicableFiles, _removeTagsFromMany, 'remove')
+	}
+}
+
+
+/** Convenience function to call modal, warnings, remove tags, and then confirmation
+ * 
+ * @param plugin 
+ * @param files 
+ */
+async function removeTagsWithModal(plugin: QuickTagPlugin, files: TFile[]){
+	let tag = await selectTag(plugin, new TagsOnFiles, files)
+	await removeTagsDirectly(plugin, files, [tag])
+}
+
+
+/** Convenience function to get active, then call tag selection dialog
+ * 
+ */
+async function removeTagsFromActiveFileWithModal(plugin: QuickTagPlugin){
+	let currentFile = getActiveFile()
+	await removeTagsWithModal(plugin, currentFile)
+}
+
+
+// region Toggle Tags
 
 /** Add or remove the given tag on the given files
  * 
@@ -113,71 +360,45 @@ function _toggleTags(files: TFile[], input_tag: string): number[] {
 	let tag_removed = 0
 
 	for(let i=0; i<files.length; i++){
-		let exists = filterTag(files[i], `#${tag}`)
+		let exists = filterTags(files[i], [`#${tag}`])
+		console.log(`exists: ${exists}`)  // TODO: remove debugging
 		if(!exists){
-			_addTag(files[i], tag)
+			_addTags(files[i], [tag])
 			tag_added++
 		} else {
-			_removeTag(files[i], tag)
+			_removeTags(files[i], [tag])
 			tag_removed++
 		}
 	}
+
+	console.log(`Tags added: ${tag_added}`)  // TODO: remove debugging
+	console.log(`Tags removed: ${tag_removed}`)  // TODO: remove debugging
 	return [tag_added, tag_removed]
 }
 
 
-/** Loop over files and add tags
+/** Add or remove the given tag on the active file
  * 
- * 
- * @param files array of files to edit
- * @param tag tag to add
- * @param plugin a reference to the plugin (used to update status bar)
- */
-async function _addTagToMany(files:TFile[], tag:string, plugin: QuickTagPlugin){
-	console.log("ADDING TAGS")
-	await _apply_bulk_changes(files, tag, plugin, _addTag)
-}
-
-
-/** Loop over files and remove tags
- * 
- * @param files array of files to edit
- * @param tag tag to remove
- * @param plugin a reference to the plugin (used to update status bar)
- */
-async function _removeTagFromMany(files:TFile[], tag:string, plugin: QuickTagPlugin){
-	console.log("REMOVING TAGS")
-	await _apply_bulk_changes(files, tag, plugin, _removeTag)
-}
-
-
-/** Consolidates the bulk processing for add/remove functions.
- * Add a progress bar in the status bar if there are lots of files
- * 
- * @param files 
  * @param tag 
- * @param plugin 
- * @param func 
  */
-async function _apply_bulk_changes(files:TFile[], tag:string, plugin:QuickTagPlugin, func:Function){
-	let status_bar = plugin.addStatusBarItem();
-	status_bar.createEl("span")
-	let useStatusBar = false
-
-	if (files.length > WOAH_LOTS_OF_FILES){
-		new Notice("Processing " + files.length + " files... This might take a while. See status bar for progress.")
-		useStatusBar = true
-	}
-	for (let i=0; i<files.length; i++){
-		if(useStatusBar){
-			status_bar.setText(`Processing ${tag}: ${i + 1}/${files.length}`)
-		}
-		await func(files[i], tag)
-	}
-
-	status_bar.remove()
+function toggleTagOnActive(plugin: QuickTagPlugin, tag: string){
+	let file = getActiveFile()
+	toggleTagOnFile(plugin, file, [tag])
 }
 
+
+function toggleTagOnFile(plugin: QuickTagPlugin, file: TFile[], tags: string[]){
+	if (tags.length > 1) {
+		new Notice("Quick Tagger ERRROR: Cannot toggle multiple tags!")
+		return
+	}
+	update_last_used_tag(plugin, tags)
+	let tag_added = _toggleTags(file, tags[0])
+	tag_added[0] ? confirmationNotification('add', tags, file) : confirmationNotification('remove', tags, file)
+}
+
+
+// region Clean notes/input
 
 /** Fix problems with processFrontMatter.
  * processFrontMatter does not work if there are newlines before the metadata
@@ -193,9 +414,10 @@ async function _cleanFile(f:TFile){
 	// if anything was changed, write it back to the file
 	if(modified){
 		console.log(`fixing up broken parts of ${f.basename}'s yaml...`)
-		await this.app.vault.modify(f, text)
+		await this.app.vault.modify(f, modified)
 	}
 }
+
 
 /** Fix problems with processFrontMatter (extracted to separate plugin process from Obsidian code)
  * 
@@ -219,14 +441,25 @@ function _cleanNoteContent(content:string){
 			content = content.replace(matches[1], "---\n")
 			modified = true
 		}
+	} else {  // Make yaml if it doesn't exist becaue processfrontmatter broke in Obsidian 1.5.5
+		// Bug report: https://forum.obsidian.md/t/filemanager-processfrontmatter-creates-plain-text-at-the-top-of-the-note-if-there-are-no-existing-properties/77008
+		// Leaving this here to avoid potential regression bugs from the Obsidian team.
+		//
+		// I'll just leave bug reports to others from now on, WhiteNoise's redundant correction was discouraging.
+		// I know the Obsidian team is small and has lots of people to deal with, but c'mon plugin developers are
+		// putting days of free labor into increasing the value of the platform. Courtesy isn't expensive.
+		content = "---\n---\n" + content
+		modified = true
 	}
 
 	if(modified){
+		console.log(content)
 		return content
 	} else {
 		return false
 	}
 }
+
 
 /** Unify tag formatting
  * 
@@ -238,37 +471,23 @@ function _formatHashTag(tag:string){
 }
 
 
-/** Collect all recognized tag list letiations into one key
+/** Takes alternate spellings recognized by Obsidan and transfers them over to the correct yaml property
  * 
- * @param yaml - a single yaml dict 
- * @returns - a single modified yaml dict
+ * @param yml frontmatter object
  */
-function _collectExistingTags(yml:any){
-	// make the desired key, if it does not exist
-	if (!yml.hasOwnProperty(tag_key) || yml[tag_key] === null){
-		yml[tag_key] = []
-	} else {
-		// catch existing string formatting that works in obsidian, but not javascript
-		yml[tag_key] = _conformToArray(yml[tag_key])
-	}
-
+function _emptyAlternateKeys(yml: any){
 	// get a list of any keys the yaml includes that we don't want
-	let alternate_keys = tag_cleanup.filter(v => Object.keys(yml).includes(v))
+	let discovered_alternate_keys = TAG_CLEANUP_KEYS.filter((v: string) => Object.keys(yml).includes(v))
 	
-	for(let i=0;i<alternate_keys.length;i++){
-		let otherTags = _conformToArray(yml[alternate_keys[i]])
+	for(let i=0;i<discovered_alternate_keys.length;i++){
+		let otherTags = _conformToArray(yml[discovered_alternate_keys[i]])
 		otherTags.forEach((tag: string) => {
 			// dump non-duplicate tags from other keys into the desired key
-			!yml[tag_key].includes(tag) ? yml[tag_key].push(tag) : console.log(tag + " already exists") 
+			!yml[TAG_KEY].includes(tag) ? yml[TAG_KEY].push(tag) : console.log(tag + " already exists") 
 		});
 
-		delete yml[alternate_keys[i]]  // remove the undesired keys
+		delete yml[discovered_alternate_keys[i]]  // remove the undesired keys
 	}
-
-	for(let i=0;i<yml[tag_key].length;i++){
-		yml[tag_key][i] = _formatHashTag(yml[tag_key][i])
-	}
-
 	return yml
   }
 
@@ -292,66 +511,319 @@ function _conformToArray(input:string | Array<string>){
 }
 
 
-/** Spawn a selection dialog and return a tag once selected
+// region Misc
+
+/** Consolidates the bulk processing for add/remove functions.
+ * Add a progress bar in the status bar if there are lots of files
  * 
- * @param plugin the main Quick-Tagger plugin
- * @param gatherer a function that returns the list of tags to display in the QuickTagSelector
- * @param notes notes that this action will affect
- * @returns promise for a tag (string) selected from the modal
+ * @param files 
+ * @param tag 
+ * @param plugin 
+ * @param func 
  */
-function selectTag(plugin: QuickTagPlugin, gatherer?: TagGatherer, notes?: TFile[]): Promise<string>{
-	let active_gatherer = gatherer ? gatherer : new AddTagList
-	let active_notes = notes ? notes : []
-	return new Promise((resolve) => {
-		new QuickTagSelector(plugin, active_gatherer, (result) => {resolve(result)}, active_notes).open();
+async function _apply_bulk_changes_wrapper(files:TFile[], tags:string[], plugin:QuickTagPlugin, func:Function){
+	let status_bar = plugin.addStatusBarItem();
+	status_bar.createEl("span")
+	let useStatusBar = false
+
+	if (files.length > WOAH_LOTS_OF_FILES){
+		new Notice("Processing " + files.length + " files... This might take a while. See status bar for progress.")
+		useStatusBar = true
+	}
+
+	let results = _apply_bulk_changes(files, tags, func, (i: number) => {
+		if(useStatusBar){
+			let tag_text = tags.length == 1 ? tags[0] : tags.length.toString() + " tags"
+			status_bar.setText(`Processing ${tag_text}: ${i + 1}/${files.length}`)
+		}
+	})
+	let failed_files = (await results.finally()).failed
+	
+	if(failed_files.length > 0){
+		console.log(failed_files)
+		console.log("Could not apply tags to: " + failed_files.join("\n\t- ") + "\nThis most likely means they have invalid YAML frotmatter.")
+		new Notice("Quick Tagger Error: Some files were not able to be proccessed. See console for details.")
+	}
+
+	status_bar.remove()
+}
+
+
+async function _apply_bulk_changes(files:TFile[], tags:string[], tag_func:Function, send_feedback:Function){
+	let results = {
+		"succeeded": [] as TFile[],
+		"failed": [] as TFile[]
+	}
+	for (let i=0; i<files.length; i++){
+		send_feedback(i)
+		try {
+			await tag_func(files[i], tags)
+			results.succeeded.push(files[i])
+		} catch {
+			results.failed.push(files[i])
+		}
+	}
+	return results
+}
+
+
+
+async function _applyTagChanges(plugin: QuickTagPlugin, tags: string[], applicableFiles: TFile[], func: Function, verb: string){
+	update_last_used_tag(plugin, tags)
+
+	let formatted_tags = tags.map((t: string) => t.replace('#', ''))
+	await func(applicableFiles, formatted_tags, plugin).then(
+		() => confirmationNotification(verb, tags, applicableFiles)
+	)
+}
+
+
+async function update_last_used_tag(plugin: QuickTagPlugin, tags: string[]){
+	if (tags.length > 1){
+		// bail, we don't want to store multiple tags in this setting
+		return
+	}
+
+	if (modal_selection_is_special(tags[0])){
+		// bail, we don't want to update if a stash was added or a special command was run
+		return
+	}
+
+	console.log("updating recently used tag") // TODO: remove debugging
+	console.log(tags) // TODO: remove debugging
+
+	let tag = tags[0]
+	plugin.settings.last_used_tag = tag
+	await plugin.saveSettings()
+
+	let commandId = 'repeat-last-tag'
+
+	if(plugin.app.commands.findCommand(commandId)) {
+		delete plugin.app.commands.commands[commandId];
+		delete plugin.app.commands.editorCommands[commandId];
+	}
+
+	plugin.addCommand({
+		id: commandId,
+		name: `Toggle recently used tag (${tag})`,
+		callback: () => {
+			toggleTagOnActive(plugin, tag)
+		}
 	})
 }
 
+// https://github.com/mrjackphil/obsidian-crosslink-between-notes/blob/1999fb8df79abdd5b35a8d088d501e3608f65d59/main.ts#L106
+function getFilesFromLineOrSelection(view: MarkdownView, plugin: QuickTagPlugin): TFile[] {
+	const cm = view.editor
+	const cursor = cm.getCursor()
+	const selectedRange = cm.getSelection()
+	const line = selectedRange || cm.getLine(cursor.line)
 
-/** Spawn notification for user that tags were added/removed successfully
- * 
- * @param mode 
- * @param tag 
- * @param applicableFiles 
- */
-function confirmationNotification(mode:string, tag:string, applicableFiles: TFile[]){
-	let notes = applicableFiles.length > 1 ? applicableFiles.length + " notes" : applicableFiles[0].basename
-	let tofrom = mode == 'add' ? " added to " : " removed from "
-	if (tag == "REMOVE ALL"){
-		new Notice("All tags removed from " + notes)
+	const regexpWiki = /\[\[.+?]]/gi
+	const linksWiki = line.match(regexpWiki) || []
+	const ar = [linksWiki].filter(e => e.length)
+
+	return Array.from(new Set(ar.flat().map((lnk) => {
+		const wikiName = lnk
+			.replace(/(\[\[|]])/g, '')
+			.replace(/\|.+/, '')
+			.replace(/#.+/, '')
+		
+		return getFilesByName(wikiName, plugin)
+	})))
+}
+
+
+function getFilesByName(name: string | string[], plugin: QuickTagPlugin) {
+	const files = plugin.app.vault.getFiles()
+
+	if (Array.isArray(name)) {
+		return files.filter(e => name.includes(e.name)
+			|| name.includes((e.path))
+			|| name.includes(e.basename)
+		)[0]
+	}
+
+	return files.filter(e => e.name === name
+		|| e.path === name
+		|| e.basename === name
+	)[0]
+}
+
+
+// region Modal Utilities
+
+function modal_selection_is_special(str: string): boolean{
+	return SPECIAL_COMMANDS.includes(str) || modal_selection_is_a_stash(str)
+}
+
+function parseModalTags(input:string){
+	if(modal_selection_is_a_stash(input)){
+		let clean_input = input.split(":")[1].trim()
+		let dirty_tags = clean_input.split(',')
+		let tags: string[] = []
+		dirty_tags.forEach((t) => tags.push(t.trim()))
+		return tags
 	} else {
-		new Notice(tag + tofrom + notes)
+		return [input]
 	}
 }
 
 
-/** Turn Obsidian command on or off for a starred tag
+/** Spawn confirmation dialogs waring users about removing all and bulk edits
  * 
- * @param app 
- * @param plugin 
- * @param StarredTag 
+ * @param mode 
+ * @param tag 
+ * @param quantity 
  * @returns 
  */
-function dynamicToggleCommand(plugin: QuickTagPlugin, StarredTag: StarredTag){
-	let tag = StarredTag.tag_value.replace('#', '')
-	let commandId = `quick-add-tag:${tag}`
-	let fullId = `quick-tagger:${commandId}`
-	let state = false
+async function addDialogs(mode: string, tags: string[], quantity?: number){
+	let verb = mode
+	let tofrom = mode == 'add' ? " to " : " from "
+	let confirm = true
 
-	if(plugin.app.commands.findCommand(fullId)) {
-		delete plugin.app.commands.commands[fullId];
-		delete plugin.app.commands.editorCommands[fullId];
-	} else {
-		plugin.addCommand({
-			id: commandId,
-			name: `Toggle #${tag}`,
-			callback: () => {
-				toggleTagOnActive(plugin, tag)
-			}
-		})
-		state = true
+	if (tags[0] == "REMOVE ALL"){
+		let msg = "This will delete all tags on the active note(s), are you sure?"
+		confirm = await _confirm_tag_changes_dialog(msg)
+		verb = ""
 	}
-	return state
+	if (!confirm) {return confirm}
+	if (quantity && quantity > 1){
+		let msg = "You are about to " + 
+					verb + " " +
+					(tags.length == 1 ? tags[0] : tags.length.toString() + " tags") +
+					tofrom +
+					quantity + " notes, are you sure?"
+		confirm = await _confirm_tag_changes_dialog(msg)
+	}
+	return confirm
+}
+
+
+async function _confirm_tag_changes_dialog(msg: string){
+	let confirm = false
+	await new Promise((resolve) => {
+		new ConfirmModal(this.app, (result) => (resolve(confirm = result)), msg).open()
+	})
+	return confirm
+}
+
+
+function wordWrap(str: string, max: number, br: string = '\n'){
+	// https://www.30secondsofcode.org/js/s/word-wrap/
+	return str.replace(new RegExp(`(?![^\\n]{1,${max}}$)([^\\n]{1,${max}})\\s`, 'g'), '$1' + br);
+}
+
+
+// region Ctxt Menu Utilities
+
+function set_up_menu_commands(plugin: QuickTagPlugin){
+	plugin.registerEvent(  // context menu when multiple items are selected in the file browser
+		plugin.app.workspace.on("files-menu", (menu: Menu, files: TFile[]) => {
+			files = onlyTaggableFiles(files)
+			if(files.length < 1){return}
+			constructTaggerContextMenu(menu, files, plugin)
+
+			
+		})
+	)
+
+	plugin.registerEvent(  // ... menu in search results window
+		plugin.app.workspace.on("search:results-menu", (menu: Menu, leaf: any) => {
+			let files = [] as TFile[]
+			files = leaf.dom.vChildren.children.map((e: any) => e.file)  // TODO: there must be a better way to do this!
+			
+			// Due to a bug I introduced, I also found (but did not implement) this alternate way to get the files from the
+			// search results. It involves Map data structures, which I am unfamilar with. I didn't hammer out a full
+			// retrieval implementation, as I found my mistake with the vChildren route and this didn't look any more promising.
+			// leaf.dom.resultDomLookup.values().next().value.file
+
+			files = onlyTaggableFiles(files)
+			if(files.length < 1){return}
+			constructTaggerContextMenu(menu, files, plugin)
+		})
+	)
+
+	plugin.registerEvent(  // context menu when right clicking on a file (file browser, active tab header, )
+		plugin.app.workspace.on("file-menu", (menu: Menu, file: TFile) => {
+			let files = onlyTaggableFiles([file])
+			if(files.length < 1){return}
+			constructTaggerContextMenu(menu, files, plugin)
+		})
+	)
+
+	plugin.registerEvent(  // context menu when right-clicking content in edit mode.
+		plugin.app.workspace.on('editor-menu', (menu: Menu, editor: Editor, view: MarkdownView) => {
+
+			// the file-menu event and editor-menu event are both triggered when right-clicking on a link in
+			// edit mode. The file-menu is always built first, so filter out the menu item to deduplicate it.
+			menu.items = menu.items.filter(item =>{
+				return item.dom.innerText !== "Quick Tag"
+			})
+
+			let files = getFilesFromLineOrSelection(view, plugin)
+			files = onlyTaggableFiles(files)
+			constructTaggerContextMenu(menu, files, plugin)
+		})
+	)
+
+	plugin.registerEvent(  // `v` menu in the tab header
+		plugin.app.workspace.on('tab-group-menu', (menu: Menu, group: any) => {
+			let files = [] as TFile[]
+			group.children.forEach((tab: any) => files.push(tab.view.file))
+			files = onlyTaggableFiles(files)
+			constructTaggerContextMenu(menu, files, plugin)
+		})
+	)
+}
+
+/** Add context menu items to a given menu
+ * 
+ */
+function constructTaggerContextMenu(menu: Menu, files: TFile[], plugin: QuickTagPlugin, section="action"){
+	if (files.length < 1) {
+		return
+	}
+	
+	menu.addItem((item) => {
+		let subMenu = item
+		  .setTitle("Quick Tag")
+		  .setIcon("tag")
+		  .setSection(section)
+		  .setSubmenu()
+		
+		subMenu
+		  .addItem((item: MenuItem) =>{
+			item
+			.setTitle("Tag " + files.length + " file(s) with...")
+			.setIcon("plus")
+			.onClick(() => {
+				addTagsWithModal(plugin, files)
+			})
+		  })
+		  .addItem((item: MenuItem) =>{
+			item.setTitle("Tag " + files.length + " file(s) with many...")
+			.setIcon("infinity")
+			.onClick(() =>{
+				addManyTagsWithLoopModal(plugin, files)
+			})
+		  })
+		
+		dynamicAddMenuItems(subMenu, files, plugin)
+
+		subMenu.addItem((item: MenuItem) =>{
+			item
+			  .setTitle("Remove Tag from " + files.length + " file(s)...")
+			  .setIcon("minus")
+			  .onClick(() => {
+				removeTagsWithModal(plugin, files)
+			  })
+		})
+
+		subMenu.addSeparator()
+
+		addCopyPasteMenuItems(subMenu, files, plugin)
+	})
 }
 
 
@@ -382,203 +854,168 @@ function dynamicAddMenuItems(menu: Menu, files: TFile[], plugin: QuickTagPlugin)
 				}
 				item
 				  .setTitle(title)
-				  .setIcon("tag")
+				  .setIcon("star")
 				  .onClick(async () => {
-					operation(plugin, files, t.tag_value)
+					operation(plugin, files, [t.tag_value])
 				  })
 			})
 		}
 	})
 }
 
+// region Status Bar Utilities
+async function showStatusBarMenu(plugin:QuickTagPlugin){
+	let statusBarRect = plugin._statusBarItem.parentElement?.getBoundingClientRect()
+	let status_bar_top = statusBarRect ? statusBarRect.top : 30
+	let statusBarIconRect = plugin._statusBarItem.getBoundingClientRect()
+	let current_file = plugin.app.workspace.getActiveFile()
 
 
-/** Spawn confirmation dialogs waring users about removing all and bulk edits
- * 
- * @param mode 
- * @param tag 
- * @param quantity 
- * @returns 
- */
-async function addDialogs(mode: string, tag: string, quantity?: number){
-	let verb = mode
-	let tofrom = mode == 'add' ? " to " : " from "
-	let confirm = true
+	plugin._statusBarItemMenu = new Menu()
 
-	if (tag == "REMOVE ALL"){
-		let msg = "This will delete all tags on the active note(s), are you sure?"
-		confirm = await adjust_tag_dialog(msg)
-		verb = ""
-	}
-	if (!confirm) {return confirm}
-	if (quantity && quantity > 1){
-		let msg = "You are about to " + 
-					verb + " " +
-					tag +
-					tofrom +
-					quantity + " notes, are you sure?"
-		confirm = await adjust_tag_dialog(msg)
-	}
-	return confirm
-}
+	populateStatusBarTagStashIndicator(plugin._statusBarItemMenu, plugin)
 
-
-async function adjust_tag_dialog(msg: string){
-	let confirm = false
-	await new Promise((resolve) => {
-		new ConfirmModal(this.app, (result) => (resolve(confirm = result)), msg).open()
+	plugin._statusBarItemMenu.addItem((item) => {
+		item
+		  .setTitle("On active file...")
+		  .setIsLabel(true)
 	})
-	return confirm
+
+	if (current_file) {
+		populateStatusBarMenuItems([current_file], plugin)
+	}
+	
+
+	let centerRect = (statusBarIconRect.left - statusBarIconRect.right) / 2 + statusBarIconRect.left
+	plugin._statusBarItemMenu.showAtPosition({
+		x: centerRect,
+		y: status_bar_top - 5,
+
+	})
 }
 
 
+async function populateStatusBarMenuItems(files:TFile[], plugin: QuickTagPlugin){
+	plugin._statusBarItemMenu
+		.addItem((item) =>{
+		item
+		.setTitle("Add tag")
+		.setIcon("plus")
+		.onClick(() => {
+			addTagsWithModal(plugin, files)
+		})
+	})
 
-//// --------------- DIRECT COMMAND CALLS ----------------- /////
+	let starredTags = plugin.settings.priorityTags
 
-/** Convenience function to call modal, warnings, add tags, and then confirmation
- * 
- * @param plugin 
- * @param files 
- */
-async function addTagsWithModal(plugin: QuickTagPlugin, files: TFile[]){
-	let tag = await selectTag(plugin, new AddTagList, files)
-	addTagsDirectly(plugin, files, tag)
-}
+	let singleFile = files.length == 1
+	let singleFileTags = [] as string[]
+	if (singleFile){
+		let tmp_gatherer = new TagsOnFiles
+		singleFileTags = tmp_gatherer.retrieve_tags(plugin, files)
+	}
+	let operation = singleFile ? toggleTagOnFile : addTagsDirectly
 
-
-/** Convenience function to get active, then call tag selection dialog
- * 
- */
-async function addTagWithModal(plugin: QuickTagPlugin){
-	let currentFile = _getActiveFile()
-	addTagsWithModal(plugin, currentFile)
-}
-
-
-/** Convenience function to call modal, warnings, remove tags, and then confirmation
- * 
- * @param plugin 
- * @param files 
- */
-async function removeTagsWithModal(plugin: QuickTagPlugin, files: TFile[]){
-	let tag = await selectTag(plugin, new TagsOnFiles, files)
-	await removeTagsDirectly(plugin, files, tag)
-}
-
-
-/** Convenience function to get active, then call tag selection dialog
- * 
- */
-async function removeTagWithModal(plugin: QuickTagPlugin){
-	let currentFile = _getActiveFile()
-	await removeTagsWithModal(plugin, currentFile)
-}
-
-
-/** Add or remove the given tag on the active file
- * 
- * @param tag 
- */
-function toggleTagOnActive(plugin: QuickTagPlugin, tag: string){
-	let file = _getActiveFile()
-	toggleTagOnFile(plugin, file, tag)
-}
-
-
-function toggleTagOnFile(plugin: QuickTagPlugin, file: TFile[], tag: string){
-	update_last_used_tag(plugin, tag)
-	let tag_added = _toggleTags(file, tag)
-	tag_added[0] ? confirmationNotification('add', tag, file) : confirmationNotification('remove', tag, file)
-}
-
-
-/** Add tags to files with appropriate warnings and notifications
- * 
- * @param plugin 
- * @param files 
- * @param tag 
- * @returns 
- */
-async function addTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tag: string){
-	let applicableFiles = getFilteredWithoutTag(files, tag)
-
-	if (applicableFiles.length == 0){
-		new Notice("No file tags to change!")
-		return
+	let buffer = plugin.settings.statusBarCount
+	for (let i = 0; i < starredTags.length; i++){
+		let t = starredTags[i]
+		if(t.status_bar){
+			if (buffer > 0){
+				buffer--
+				continue
+			}
+			plugin._statusBarItemMenu.addItem((item) =>{
+				let title = `${t.tag_value}`
+				let icon = 'plus'
+				if (singleFile){
+					let state = singleFileTags.includes(t.tag_value)
+					icon = state ? 'minus' : 'plus'
+				}
+				item
+				  .setTitle(title)
+				  .setIcon(icon)
+				  .onClick(async () => {
+					operation(plugin, files, [t.tag_value])
+				  })
+			})
+		}
 	}
 
-	let confirm = await addDialogs('add', tag, files.length)
+	plugin._statusBarItemMenu.addItem((item) =>{
+		item
+			.setTitle("Remove tag")
+			.setIcon("minus")
+			.onClick(() => {
+			removeTagsWithModal(plugin, files)
+			})
+	})
 
-	if (confirm){
-		update_last_used_tag(plugin, tag)
-		await _addTagToMany(applicableFiles, tag.replace('#', ''), plugin).then(
-			() => confirmationNotification('add', tag, applicableFiles)
-		)
-	}
-}
-
-/** Convenience function to add tag directly to a note
- *  
- * @param plugin 
- * @param tag 
- */
-async function addTagDirectly(plugin: QuickTagPlugin, tag: string){
-	let file = _getActiveFile()
-	addTagsDirectly(plugin, file, tag)
 }
 
 
-/** Remove tags from files with appropriate warnings and notifictions
- * 
- * @param plugin 
- * @param files 
- * @param tag 
- * @returns 
- */
-async function removeTagsDirectly(plugin: QuickTagPlugin, files: TFile[], tag: string){
-	let applicableFiles = getFilteredWithTag(files, tag)
+// region Command Utilities
 
-	if (applicableFiles.length == 0){
-		new Notice("No file tags to change!")
-		return
-	}
-
-	let confirm = await addDialogs('remove', tag, applicableFiles.length)
-
-	if (confirm){
-		update_last_used_tag(plugin, tag)
-		await _removeTagFromMany(applicableFiles, tag.replace('#', ''), plugin).then(
-			() => confirmationNotification('remove', tag, applicableFiles)
-		)
-	}
-}
-
-
-/** Convenience function to remove tag directly from a note
- * 
- */
-async function removeTagDirectly(plugin: QuickTagPlugin, tag: string){
-	let file = _getActiveFile()
-	removeTagsDirectly(plugin, file, tag)
-}
-
-
-async function update_last_used_tag(plugin: QuickTagPlugin, tag: string){
-	plugin.settings.last_used_tag = tag
-	await plugin.saveSettings()
-
-	let commandId = 'repeat-last-tag'
-
-	if(plugin.app.commands.findCommand(commandId)) {
-		delete plugin.app.commands.commands[commandId];
-		delete plugin.app.commands.editorCommands[commandId];
-	}
+function set_up_command_pallet(plugin: QuickTagPlugin){
+	// Command Pallet Commands
+	plugin.addCommand({
+		id: 'quick-add-tag',
+		name: 'Add tag(s)',
+		callback: () => {
+			addTagsToActiveFileWithModal(plugin)
+		}
+	});
 
 	plugin.addCommand({
-		id: commandId,
-		name: `Toggle recently used tag (${tag})`,
+		id: 'quick-add-tag-loop',
+		name: 'Add tag(s) with looping modal',
 		callback: () => {
-			toggleTagOnActive(plugin, tag)
+			addTagsToActiveFileWithLoopingModal(plugin)
 		}
 	})
+
+	plugin.addCommand({
+		id: 'quick-remove-tag',
+		name: 'Remove tag',
+		callback: () => {
+			removeTagsFromActiveFileWithModal(plugin)
+		}
+	});
+
+	plugin.addCommand({
+		id: 'repeat-last-tag',
+		name: `Toggle recently used tag (none)`,
+		callback: () => {
+			new Notice("ERROR: No recent tag, please assign a tag with Quick Tagger before using this command")
+		}
+	})
+}
+
+
+/** Turn Obsidian command on or off for a starred tag
+ * 
+ * @param app 
+ * @param plugin 
+ * @param StarredTag 
+ * @returns 
+ */
+function dynamicToggleCommand(plugin: QuickTagPlugin, StarredTag: StarredTag){
+	let tag = StarredTag.tag_value.replace('#', '')
+	let commandId = `quick-add-tag:${tag}`
+	let fullId = `quick-tagger:${commandId}`
+	let state = false
+
+	if(plugin.app.commands.findCommand(fullId)) {
+		delete plugin.app.commands.commands[fullId];
+		delete plugin.app.commands.editorCommands[fullId];
+	} else {
+		plugin.addCommand({
+			id: commandId,
+			name: `Toggle #${tag}`,
+			callback: () => {
+				toggleTagOnActive(plugin, tag)
+			}
+		})
+		state = true
+	}
+	return state
 }

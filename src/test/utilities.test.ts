@@ -1,6 +1,17 @@
-import { _cleanNoteContent, _formatHashTag, _addFrontMatterTag, _getRemovalProcessor,
-         _removeAllFrontMatterTags, _removeFrontMatterTag, _conformToArray } from "utilities"
-import { TFile } from "obsidian"
+import { _cleanNoteContent, _formatHashTag, _addFrontMatterTags, _getRemovalProcessor,
+         _removeAllFrontMatterTags, _removeFrontMatterTag, _conformToArray,
+         _apply_bulk_changes } from "utilities"
+
+
+// region Mock imports
+import { TFile } from "./mocks/obsidian"
+import { _cleanFile } from "./mocks/quick_tagger_mocks"
+
+
+
+
+
+// region tests
 
 test('removes leading newlines and trailing spaces from yaml header', () => {
     expect(_cleanNoteContent(`
@@ -62,7 +73,7 @@ class TestFrontmatterTag{
 
 // Test _addFrontMatterTag
 test('test after adding a tag', () => {
-    let execution = new TestFrontmatterTag('hello', _addFrontMatterTag);
+    let execution = new TestFrontmatterTag('hello', _addFrontMatterTags);
     execution.run()(mock_yaml);
     expect(mock_yaml).toStrictEqual(fixed_mock_yaml);
 })
@@ -70,11 +81,11 @@ test('test after adding a tag', () => {
 
 // test getting the correct removal processor
 test('get remove single tag processor', () => {
-    expect(_getRemovalProcessor('something')).toBe(_removeFrontMatterTag)
+    expect(_getRemovalProcessor(['something'])).toBe(_removeFrontMatterTag)
 })
 
 test('get remove all tag processor', () => {
-    expect(_getRemovalProcessor('REMOVE ALL')).toBe(_removeAllFrontMatterTags)
+    expect(_getRemovalProcessor(['REMOVE ALL'])).toBe(_removeAllFrontMatterTags)
 })
 
 
@@ -95,3 +106,14 @@ test('remove all tags', () => {
     expect(mock_yaml).toStrictEqual(removal_all_fixed_mock_yaml)
 })
 
+
+// region Bulk Processing tests
+let mock_goodfile1 = new TFile()
+let mock_goodfile2 = new TFile()
+let mock_badfile = new TFile()
+
+let mock_files = [mock_goodfile1, mock_goodfile1, mock_goodfile2]
+
+test('bulk apply should log and continue if it encounters bad yaml', () => {
+    let results = _apply_bulk_changes(mock_files, ["testTag"], (file, tag) => )
+})

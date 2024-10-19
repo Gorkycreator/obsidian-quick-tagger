@@ -10,10 +10,17 @@ class App {
             return(['testing1', 'testing2', 'testing3'])
         }
     }
+
+    commands = {
+
+    }
 }
 
 class TFile {
-
+    text = "sample_text"
+    get_text() {
+        return this.text
+    }
 }
 
 class Menu {
